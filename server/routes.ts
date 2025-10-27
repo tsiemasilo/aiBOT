@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertPostSchema, insertScheduleSettingsSchema, insertAutomationSettingsSchema, insertConnectedAccountSchema } from "@shared/schema";
+import { paraphraseCaption } from "./openai";
 
 // Helper function to analyze Instagram content
 function analyzeInstagramContent(username: string, profileData: any, posts: any[]) {
@@ -585,6 +586,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete account" });
+    }
+  });
+
+  // Generate repost content from confirmed source profile
+  app.post("/api/generate-repost", async (req, res) => {
+    try {
+      const automationSettings = await storage.getAutomationSettings();
+      
+      if (!automationSettings || !automationSettings.isProfileConfirmed) {
+        return res.status(400).json({ error: "No confirmed source profile found. Please confirm a profile first." });
+      }
+
+      const sourcePosts = automationSettings.sourceProfilePosts as any[] || [];
+      if (sourcePosts.length === 0) {
+        return res.status(400).json({ error: "No posts available from the source profile" });
+      }
+
+      // Select a random post
+      const randomPost = sourcePosts[Math.floor(Math.random() * sourcePosts.length)];
+      
+      // Extract image URL and caption
+      const imageUrl = randomPost.display_url || randomPost.thumbnail_url || randomPost.image_url || '';
+      const originalCaption = randomPost.caption?.text || randomPost.caption || '';
+      
+      if (!imageUrl) {
+        return res.status(400).json({ error: "Selected post has no image" });
+      }
+
+      // Get all captions for style learning
+      const allCaptions = sourcePosts
+        .map((post: any) => post.caption?.text || post.caption || '')
+        .filter((caption: string) => caption.length > 0);
+
+      // Paraphrase the caption using OpenAI
+      const paraphrasedCaption = await paraphraseCaption({
+        originalCaption,
+        profileUsername: (automationSettings.sourceProfileData as any)?.username || 'source',
+        sampleCaptions: allCaptions,
+      });
+
+      res.json({
+        imageUrl,
+        originalCaption,
+        paraphrasedCaption,
+        sourceUsername: (automationSettings.sourceProfileData as any)?.username,
+        postData: {
+          timestamp: randomPost.taken_at || randomPost.timestamp,
+          likes: randomPost.like_count,
+          comments: randomPost.comment_count,
+        },
+      });
+    } catch (error) {
+      console.error('Generate repost error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : "Failed to generate repost content" 
+      });
     }
   });
 
