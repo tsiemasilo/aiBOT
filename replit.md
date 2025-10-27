@@ -6,9 +6,11 @@ InstaScheduler is a full-stack Instagram automation platform that enables users 
 
 **Core Features:**
 - Post scheduling and management with calendar visualization
-- Instagram profile search and confirmation for reposting
+- Instagram profile search with Instagram-style profile preview (profile picture, posts/followers/following counts, recent posts carousel)
 - Automated reposting with AI-paraphrased captions that match the source profile's style
 - Random post selection from confirmed source profiles
+- Dashboard with separate views for automated queue and manual posts
+- Queued automated posts preview showing upcoming content from source profile
 - Analytics dashboard for tracking post performance
 - Configurable posting schedules with custom time slots
 
@@ -50,8 +52,9 @@ Preferred communication style: Simple, everyday language.
 - `/api/posts` - CRUD operations for scheduled posts
 - `/api/schedule` - Schedule settings configuration
 - `/api/automation` - Automation settings management
-- `/api/search-profile` - Search and preview Instagram profiles
+- `/api/search-profile` - Search and preview Instagram profiles with full profile data (followers, following, posts count, recent posts)
 - `/api/confirm-profile` - Confirm a profile as the source for reposting
+- `/api/queued-posts` - Get preview of queued automated posts from confirmed source profile
 - `/api/generate-repost` - Generate repost content with paraphrased captions
 - `/api/analyze-profile` - (Legacy) Instagram profile content analysis endpoint
 - `/api/accounts` - Connected Instagram accounts management
@@ -166,9 +169,10 @@ Currently implements session management infrastructure via `connect-pg-simple` b
 
 ### AI Integration
 - **OpenAI GPT-5** - Used for caption paraphrasing
-- `server/openai.ts` - OpenAI client configuration and helper functions
+- `server/openai.ts` - OpenAI client configuration and helper functions with lazy-loading for error resilience
 - `paraphraseCaption()` - Analyzes source profile's writing style and paraphrases captions to match their tone, vocabulary, and lingo
 - Environment variable: `OPENAI_API_KEY`
+- **Security**: OpenAI client is lazy-loaded to prevent application crashes when API key is not configured
 
 ### External APIs
 - **RapidAPI Instagram Scraper** - Fetches Instagram profile data and posts
