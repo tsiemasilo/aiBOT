@@ -258,7 +258,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Please provide a valid Instagram URL" });
       }
 
-      const username = url.split('/').filter(Boolean).pop()?.replace('@', '') || '';
+      // Extract username from URL, handling query parameters and trailing slashes
+      let username = '';
+      try {
+        const parsedUrl = new URL(url);
+        const pathParts = parsedUrl.pathname.split('/').filter(Boolean);
+        username = pathParts[0]?.replace('@', '') || '';
+      } catch {
+        // Fallback to simple split if URL parsing fails
+        username = url.split('/').filter(Boolean).pop()?.split('?')[0]?.replace('@', '') || '';
+      }
+      
       if (!username || username.length > 30 || !/^[a-zA-Z0-9._]+$/.test(username)) {
         return res.status(400).json({ error: "Invalid Instagram username format" });
       }
