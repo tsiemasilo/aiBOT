@@ -4,12 +4,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Search, Loader2, CheckCircle2, Instagram, Users, ImageIcon } from "lucide-react";
+import { Search, Loader2, CheckCircle2, Instagram, Users, ImageIcon, UserPlus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import useEmblaCarousel from 'embla-carousel-react';
 
 interface ProfilePreview {
   username: string;
@@ -30,6 +31,7 @@ export function ProfileSelector() {
   const { toast } = useToast();
   const [url, setUrl] = useState("");
   const [profilePreview, setProfilePreview] = useState<ProfilePreview | null>(null);
+  const [emblaRef] = useEmblaCarousel({ loop: true, align: 'start' });
 
   const { data: automationSettings } = useQuery<{
     sourceProfileUrl?: string;
@@ -96,6 +98,114 @@ export function ProfileSelector() {
   const isConfirmed = automationSettings?.isProfileConfirmed;
   const confirmedProfile = automationSettings?.sourceProfileData;
 
+  const formatNumber = (num?: number) => {
+    if (num === undefined) return '0';
+    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
+    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
+    return num.toLocaleString();
+  };
+
+  const renderInstagramProfile = (profile: ProfilePreview, isConfirmedView: boolean = false) => (
+    <div className="space-y-4">
+      {isConfirmedView && (
+        <Alert className="border-green-500/50 bg-green-500/10">
+          <CheckCircle2 className="h-4 w-4 text-green-500" />
+          <AlertDescription className="text-green-700 dark:text-green-400">
+            Source profile confirmed
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <div className="bg-gradient-to-b from-muted/50 to-background p-6 rounded-xl border">
+        <div className="flex flex-col items-center gap-4 mb-6">
+          <Avatar className="h-24 w-24 border-4 border-background shadow-lg">
+            <AvatarImage src={profile.profilePicUrl} />
+            <AvatarFallback className="bg-gradient-to-br from-purple-400 to-orange-400 text-white text-2xl">
+              <Instagram className="h-12 w-12" />
+            </AvatarFallback>
+          </Avatar>
+
+          <div className="text-center space-y-1">
+            <h4 className="font-bold text-xl" data-testid={isConfirmedView ? "text-confirmed-username" : "text-preview-username"}>
+              {profile.username}
+            </h4>
+            {profile.fullName && (
+              <p className="text-sm text-muted-foreground font-medium">{profile.fullName}</p>
+            )}
+          </div>
+        </div>
+
+        <div className="flex justify-center gap-8 mb-6 py-4 border-y">
+          <div className="text-center">
+            <div className="font-bold text-lg" data-testid="text-posts-count">{formatNumber(profile.postsCount)}</div>
+            <div className="text-xs text-muted-foreground uppercase tracking-wide">Posts</div>
+          </div>
+          <div className="text-center">
+            <div className="font-bold text-lg" data-testid="text-followers-count">{formatNumber(profile.followersCount)}</div>
+            <div className="text-xs text-muted-foreground uppercase tracking-wide">Followers</div>
+          </div>
+          <div className="text-center">
+            <div className="font-bold text-lg" data-testid="text-following-count">{formatNumber(profile.followingCount)}</div>
+            <div className="text-xs text-muted-foreground uppercase tracking-wide">Following</div>
+          </div>
+        </div>
+
+        {profile.bio && (
+          <div className="text-sm text-center mb-4 px-4">
+            <p className="line-clamp-3">{profile.bio}</p>
+          </div>
+        )}
+
+        {isConfirmedView && (
+          <Badge variant="default" className="w-full justify-center gap-1 py-2">
+            <CheckCircle2 className="h-4 w-4" />
+            Confirmed Source
+          </Badge>
+        )}
+      </div>
+
+      {profile.recentPosts && profile.recentPosts.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="font-semibold flex items-center gap-2">
+              <ImageIcon className="h-4 w-4" />
+              Recent Posts
+            </h4>
+            <span className="text-xs text-muted-foreground">
+              {profile.recentPosts.length} posts available
+            </span>
+          </div>
+
+          <div className="overflow-hidden rounded-lg border" ref={emblaRef}>
+            <div className="flex gap-1">
+              {profile.recentPosts.map((post, index) => (
+                <div 
+                  key={index} 
+                  className="flex-[0_0_33.333%] min-w-0"
+                  data-testid={`preview-post-${index}`}
+                >
+                  <div className="aspect-square bg-muted overflow-hidden">
+                    {post.imageUrl && (
+                      <img 
+                        src={post.imageUrl} 
+                        alt={`Post ${index + 1}`}
+                        className="w-full h-full object-cover hover:scale-105 transition-transform cursor-pointer"
+                      />
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          <p className="text-xs text-muted-foreground text-center">
+            Swipe to see more posts from this profile
+          </p>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <Card>
@@ -139,129 +249,41 @@ export function ProfileSelector() {
               </div>
 
               {profilePreview && (
-                <div className="pt-4 border-t">
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-semibold">Profile Preview</h3>
-                      <Button 
-                        onClick={handleConfirm}
-                        disabled={confirmProfileMutation.isPending}
-                        data-testid="button-confirm-profile"
-                      >
-                        {confirmProfileMutation.isPending ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Confirming
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle2 className="mr-2 h-4 w-4" />
-                            Confirm Profile
-                          </>
-                        )}
-                      </Button>
-                    </div>
-
-                    <div className="flex items-start gap-4 p-4 bg-muted rounded-lg">
-                      <Avatar className="h-16 w-16">
-                        <AvatarImage src={profilePreview.profilePicUrl} />
-                        <AvatarFallback className="bg-gradient-to-br from-purple-400 to-orange-400 text-white text-xl">
-                          <Instagram className="h-8 w-8" />
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 space-y-2">
-                        <div>
-                          <h4 className="font-semibold text-lg" data-testid="text-preview-username">
-                            @{profilePreview.username}
-                          </h4>
-                          {profilePreview.fullName && (
-                            <p className="text-sm text-muted-foreground">{profilePreview.fullName}</p>
-                          )}
-                        </div>
-                        {profilePreview.bio && (
-                          <p className="text-sm">{profilePreview.bio}</p>
-                        )}
-                        <div className="flex gap-4 text-sm">
-                          {profilePreview.postsCount !== undefined && (
-                            <div className="flex items-center gap-1">
-                              <ImageIcon className="h-4 w-4" />
-                              <span className="font-semibold">{profilePreview.postsCount}</span>
-                              <span className="text-muted-foreground">posts</span>
-                            </div>
-                          )}
-                          {profilePreview.followersCount !== undefined && (
-                            <div className="flex items-center gap-1">
-                              <Users className="h-4 w-4" />
-                              <span className="font-semibold">{profilePreview.followersCount.toLocaleString()}</span>
-                              <span className="text-muted-foreground">followers</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {profilePreview.recentPosts && profilePreview.recentPosts.length > 0 && (
-                      <div className="space-y-2">
-                        <h4 className="font-medium">Recent Posts Preview</h4>
-                        <div className="grid grid-cols-3 gap-2">
-                          {profilePreview.recentPosts.slice(0, 6).map((post, index) => (
-                            <div 
-                              key={index} 
-                              className="aspect-square bg-muted rounded-md overflow-hidden"
-                              data-testid={`preview-post-${index}`}
-                            >
-                              {post.imageUrl && (
-                                <img 
-                                  src={post.imageUrl} 
-                                  alt={`Post ${index + 1}`}
-                                  className="w-full h-full object-cover"
-                                />
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    <Alert>
-                      <AlertDescription>
-                        Confirming this profile will allow the automation to randomly select and repost content from @{profilePreview.username} to your connected Instagram account.
-                      </AlertDescription>
-                    </Alert>
+                <div className="pt-4 border-t space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold">Profile Preview</h3>
+                    <Button 
+                      onClick={handleConfirm}
+                      disabled={confirmProfileMutation.isPending}
+                      data-testid="button-confirm-profile"
+                    >
+                      {confirmProfileMutation.isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Confirming
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="mr-2 h-4 w-4" />
+                          Confirm Profile
+                        </>
+                      )}
+                    </Button>
                   </div>
+
+                  {renderInstagramProfile(profilePreview)}
+
+                  <Alert>
+                    <AlertDescription>
+                      Confirming this profile will allow the automation to randomly select and repost content from @{profilePreview.username} to your connected Instagram account.
+                    </AlertDescription>
+                  </Alert>
                 </div>
               )}
             </>
           ) : (
             <div className="space-y-4">
-              <Alert className="border-green-500/50 bg-green-500/10">
-                <CheckCircle2 className="h-4 w-4 text-green-500" />
-                <AlertDescription className="text-green-700 dark:text-green-400">
-                  Source profile confirmed
-                </AlertDescription>
-              </Alert>
-
-              <div className="flex items-start gap-4 p-4 bg-muted rounded-lg">
-                <Avatar className="h-16 w-16">
-                  <AvatarImage src={confirmedProfile?.profilePicUrl} />
-                  <AvatarFallback className="bg-gradient-to-br from-purple-400 to-orange-400 text-white text-xl">
-                    <Instagram className="h-8 w-8" />
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1 space-y-2">
-                  <div>
-                    <h4 className="font-semibold text-lg" data-testid="text-confirmed-username">
-                      @{confirmedProfile?.username}
-                    </h4>
-                    {confirmedProfile?.fullName && (
-                      <p className="text-sm text-muted-foreground">{confirmedProfile.fullName}</p>
-                    )}
-                  </div>
-                  <Badge variant="default" className="gap-1">
-                    <CheckCircle2 className="h-3 w-3" />
-                    Confirmed
-                  </Badge>
-                </div>
+              <div className="flex justify-end">
                 <Button 
                   variant="outline" 
                   size="sm"
@@ -278,6 +300,8 @@ export function ProfileSelector() {
                   Change Profile
                 </Button>
               </div>
+
+              {confirmedProfile && renderInstagramProfile(confirmedProfile, true)}
 
               <div className="p-4 bg-primary/10 rounded-lg border border-primary/20">
                 <h4 className="font-medium mb-2">How it works</h4>

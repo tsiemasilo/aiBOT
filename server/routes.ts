@@ -589,6 +589,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get queued automated posts from confirmed source profile
+  app.get("/api/queued-posts", async (req, res) => {
+    try {
+      const automationSettings = await storage.getAutomationSettings();
+      
+      if (!automationSettings || !automationSettings.isProfileConfirmed) {
+        return res.json([]);
+      }
+
+      const sourcePosts = automationSettings.sourceProfilePosts as any[] || [];
+      if (sourcePosts.length === 0) {
+        return res.json([]);
+      }
+
+      const limit = parseInt(req.query.limit as string) || 6;
+      
+      const shuffled = [...sourcePosts].sort(() => Math.random() - 0.5);
+      const selectedPosts = shuffled.slice(0, limit);
+
+      const queuedPosts = selectedPosts.map((post: any, index: number) => ({
+        id: `queued-${index}`,
+        imageUrl: post.display_url || post.thumbnail_url || post.image_url || '',
+        caption: post.caption?.text || post.caption || 'No caption available',
+        sourceUsername: (automationSettings.sourceProfileData as any)?.username || 'source',
+        status: 'queued',
+        scheduledDate: new Date(Date.now() + (index + 1) * 24 * 60 * 60 * 1000),
+        postData: {
+          timestamp: post.taken_at || post.timestamp,
+          likes: post.like_count,
+          comments: post.comment_count,
+        },
+      })).filter((post: any) => post.imageUrl);
+
+      res.json(queuedPosts);
+    } catch (error) {
+      console.error('Get queued posts error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : "Failed to get queued posts" 
+      });
+    }
+  });
+
   // Generate repost content from confirmed source profile
   app.post("/api/generate-repost", async (req, res) => {
     try {
