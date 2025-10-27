@@ -1,10 +1,11 @@
 import {
   Calendar,
   Home,
-  Image,
   Search,
   Clock,
   BarChart3,
+  Settings as SettingsIcon,
+  Sparkles,
 } from "lucide-react";
 import {
   Sidebar,
@@ -26,24 +27,29 @@ const menuItems = [
     icon: Home,
   },
   {
+    title: "Automation",
+    url: "/automation",
+    icon: Sparkles,
+  },
+  {
+    title: "Profile Analyzer",
+    url: "/analyzer",
+    icon: Search,
+  },
+  {
     title: "Schedule",
     url: "/schedule",
     icon: Calendar,
   },
   {
-    title: "Create Post",
-    url: "/create",
-    icon: Image,
-  },
-  {
-    title: "Automation",
-    url: "/automation",
-    icon: Search,
-  },
-  {
     title: "Analytics",
     url: "/analytics",
     icon: BarChart3,
+  },
+  {
+    title: "Settings",
+    url: "/settings",
+    icon: SettingsIcon,
   },
 ];
 

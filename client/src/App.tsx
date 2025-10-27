@@ -9,9 +9,10 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import Dashboard from "@/pages/Dashboard";
 import Schedule from "@/pages/Schedule";
-import Create from "@/pages/Create";
 import Automation from "@/pages/Automation";
 import Analytics from "@/pages/Analytics";
+import Analyzer from "@/pages/Analyzer";
+import Settings from "@/pages/Settings";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -19,9 +20,10 @@ function Router() {
     <Switch>
       <Route path="/" component={Dashboard} />
       <Route path="/schedule" component={Schedule} />
-      <Route path="/create" component={Create} />
       <Route path="/automation" component={Automation} />
+      <Route path="/analyzer" component={Analyzer} />
       <Route path="/analytics" component={Analytics} />
+      <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>
   );
