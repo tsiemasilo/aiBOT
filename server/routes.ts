@@ -245,9 +245,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ error: "API key not configured" });
       }
 
-      // Fetch user profile data
+      // Fetch user profile and posts data
       const profileResponse = await fetch(
-        `https://instagram-scraper-stable-api.p.rapidapi.com/user?username=${username}`,
+        `https://instagram-scraper-stable-api.p.rapidapi.com/userinfo?username=${username}`,
         {
           headers: {
             'X-RapidAPI-Key': RAPIDAPI_KEY,
@@ -257,14 +257,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       if (!profileResponse.ok) {
-        throw new Error(`Failed to fetch profile: ${profileResponse.status}`);
+        const errorText = await profileResponse.text();
+        console.error('Profile fetch error:', profileResponse.status, errorText);
+        throw new Error(`Failed to fetch profile: ${profileResponse.status}. Please ensure you're subscribed to the Instagram Scraper Stable API on RapidAPI.`);
       }
 
       const profileData = await profileResponse.json();
 
-      // Fetch user posts
+      // Fetch user posts/media
       const postsResponse = await fetch(
-        `https://instagram-scraper-stable-api.p.rapidapi.com/user_posts?username=${username}`,
+        `https://instagram-scraper-stable-api.p.rapidapi.com/usermedia?username=${username}`,
         {
           headers: {
             'X-RapidAPI-Key': RAPIDAPI_KEY,
@@ -274,6 +276,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       if (!postsResponse.ok) {
+        const errorText = await postsResponse.text();
+        console.error('Posts fetch error:', postsResponse.status, errorText);
         throw new Error(`Failed to fetch posts: ${postsResponse.status}`);
       }
 
