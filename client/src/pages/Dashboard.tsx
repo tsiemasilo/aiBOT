@@ -1,18 +1,17 @@
-import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { AnalyticsCard } from "@/components/AnalyticsCard";
 import { PostCard, Post } from "@/components/PostCard";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { EmptyState } from "@/components/EmptyState";
-import { CreatePostDialog } from "@/components/CreatePostDialog";
-import { Calendar as CalendarIcon, Clock, CheckCircle, ImageIcon, Plus } from "lucide-react";
+import { Calendar as CalendarIcon, Clock, CheckCircle, ImageIcon, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import emptyStateImage from "@assets/generated_images/Empty_state_calendar_illustration_0d8d2e82.png";
 
 export default function Dashboard() {
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
 
   const { data: posts = [], isLoading } = useQuery<Post[]>({
@@ -61,19 +60,13 @@ export default function Dashboard() {
         <div>
           <h1 className="text-3xl font-semibold">Dashboard</h1>
           <p className="text-muted-foreground mt-1">
-            Manage your Instagram posting schedule
+            Automated Instagram posting powered by AI
           </p>
         </div>
-        <CreatePostDialog 
-          trigger={
-            <Button data-testid="button-create-post">
-              <Plus className="h-4 w-4 mr-2" />
-              Create Post
-            </Button>
-          }
-          open={createDialogOpen}
-          onOpenChange={setCreateDialogOpen}
-        />
+        <Button onClick={() => setLocation("/automation")} data-testid="button-setup-automation">
+          <Sparkles className="h-4 w-4 mr-2" />
+          Setup Automation
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -128,10 +121,10 @@ export default function Dashboard() {
           ) : (
             <EmptyState
               image={emptyStateImage}
-              title="No scheduled posts yet"
-              description="Start scheduling your Instagram posts to maintain a consistent presence on your profile."
-              actionLabel="Create Your First Post"
-              onAction={() => setCreateDialogOpen(true)}
+              title="No automated posts yet"
+              description="Set up automation to automatically generate and schedule Instagram posts based on analyzed content patterns."
+              actionLabel="Setup Automation"
+              onAction={() => setLocation("/automation")}
             />
           )}
         </div>
