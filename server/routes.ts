@@ -227,8 +227,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const settings = await storage.getAutomationSettings();
       res.json(settings || {
         enabled: false,
-        profileUrl: null,
-        analyzedData: null,
+        sourceProfileUrl: null,
+        sourceProfileData: null,
+        sourceProfilePosts: null,
+        isProfileConfirmed: false,
         lastAnalyzedAt: null,
       });
     } catch (error) {
@@ -242,6 +244,168 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(settings);
     } catch (error) {
       res.status(500).json({ error: "Failed to save automation settings" });
+    }
+  });
+
+  // Profile Search Route (for preview before confirmation)
+  app.post("/api/search-profile", async (req, res) => {
+    try {
+      const { url } = req.body;
+      if (!url) {
+        return res.status(400).json({ error: "Profile URL is required" });
+      }
+
+      const urlPattern = /^https?:\/\/(www\.)?instagram\.com\//i;
+      if (!urlPattern.test(url)) {
+        return res.status(400).json({ error: "Please provide a valid Instagram URL" });
+      }
+
+      // Extract username from URL
+      let username = '';
+      try {
+        const parsedUrl = new URL(url);
+        const pathParts = parsedUrl.pathname.split('/').filter(Boolean);
+        username = pathParts[0]?.replace('@', '') || '';
+      } catch {
+        username = url.split('/').filter(Boolean).pop()?.split('?')[0]?.replace('@', '') || '';
+      }
+      
+      if (!username || username.length > 30 || !/^[a-zA-Z0-9._]+$/.test(username)) {
+        return res.status(400).json({ error: "Invalid Instagram username format" });
+      }
+
+      const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
+      if (!RAPIDAPI_KEY) {
+        return res.status(503).json({ error: "Profile search service is currently unavailable" });
+      }
+
+      // Fetch profile data
+      const profileResponse = await fetch(
+        `https://instagram-scraper-stable-api.p.rapidapi.com/get_ig_user_about.php?username_or_url=${username}`,
+        {
+          headers: {
+            'X-RapidAPI-Key': RAPIDAPI_KEY,
+            'X-RapidAPI-Host': 'instagram-scraper-stable-api.p.rapidapi.com'
+          }
+        }
+      );
+
+      if (!profileResponse.ok) {
+        throw new Error(`Failed to fetch profile: ${profileResponse.status}`);
+      }
+
+      const profileData = await profileResponse.json();
+
+      // Fetch recent posts for preview
+      let recentPosts = [];
+      const postEndpoints = ['get_user_posts.php', 'get_ig_posts.php'];
+      
+      for (const endpoint of postEndpoints) {
+        try {
+          const postsResponse = await fetch(
+            `https://instagram-scraper-stable-api.p.rapidapi.com/${endpoint}?username_or_url=${username}`,
+            {
+              headers: {
+                'X-RapidAPI-Key': RAPIDAPI_KEY,
+                'X-RapidAPI-Host': 'instagram-scraper-stable-api.p.rapidapi.com'
+              }
+            }
+          );
+
+          if (postsResponse.ok) {
+            const postsData = await postsResponse.json();
+            const posts = postsData.data?.items || postsData.items || postsData.data || [];
+            if (posts.length > 0) {
+              recentPosts = posts.slice(0, 12).map((post: any) => ({
+                imageUrl: post.display_url || post.thumbnail_url || post.image_url,
+                caption: post.caption?.text || post.caption || '',
+                timestamp: post.taken_at || post.timestamp,
+              }));
+              break;
+            }
+          }
+        } catch (error) {
+          console.log(`Failed to fetch from ${endpoint}, trying next...`);
+        }
+      }
+
+      // Return preview data
+      res.json({
+        username,
+        fullName: profileData.data?.full_name || profileData.full_name,
+        bio: profileData.data?.biography || profileData.biography,
+        profilePicUrl: profileData.data?.profile_pic_url || profileData.profile_pic_url,
+        followersCount: profileData.data?.follower_count || profileData.follower_count,
+        followingCount: profileData.data?.following_count || profileData.following_count,
+        postsCount: profileData.data?.media_count || profileData.media_count,
+        recentPosts,
+      });
+    } catch (error) {
+      console.error('Profile search error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : "Failed to search profile" 
+      });
+    }
+  });
+
+  // Confirm Profile Route (save for automation)
+  app.post("/api/confirm-profile", async (req, res) => {
+    try {
+      const { url, profileData } = req.body;
+      if (!url || !profileData) {
+        return res.status(400).json({ error: "Profile URL and data are required" });
+      }
+
+      const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
+      if (!RAPIDAPI_KEY) {
+        return res.status(503).json({ error: "Service is currently unavailable" });
+      }
+
+      // Fetch all posts from the profile for automation to use
+      let allPosts = [];
+      const username = profileData.username;
+      const postEndpoints = ['get_user_posts.php', 'get_ig_posts.php'];
+      
+      for (const endpoint of postEndpoints) {
+        try {
+          const postsResponse = await fetch(
+            `https://instagram-scraper-stable-api.p.rapidapi.com/${endpoint}?username_or_url=${username}`,
+            {
+              headers: {
+                'X-RapidAPI-Key': RAPIDAPI_KEY,
+                'X-RapidAPI-Host': 'instagram-scraper-stable-api.p.rapidapi.com'
+              }
+            }
+          );
+
+          if (postsResponse.ok) {
+            const postsData = await postsResponse.json();
+            const posts = postsData.data?.items || postsData.items || postsData.data || [];
+            if (posts.length > 0) {
+              allPosts = posts;
+              break;
+            }
+          }
+        } catch (error) {
+          console.log(`Failed to fetch posts from ${endpoint}`);
+        }
+      }
+
+      // Save confirmed profile and posts to automation settings
+      await storage.saveAutomationSettings({
+        sourceProfileUrl: url,
+        sourceProfileData: profileData,
+        sourceProfilePosts: allPosts,
+        isProfileConfirmed: true,
+        lastAnalyzedAt: new Date(),
+      });
+
+      res.json({ success: true, message: "Profile confirmed successfully" });
+    } catch (error) {
+      console.error('Profile confirmation error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : "Failed to confirm profile" 
+      });
     }
   });
 
@@ -337,10 +501,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Analyze content
       const analyzedData = analyzeInstagramContent(username, profileData, posts);
 
-      // Save analyzed data to automation settings
+      // Save analyzed data to automation settings (for backward compatibility with old analyzer)
       await storage.saveAutomationSettings({
-        profileUrl: url,
-        analyzedData,
+        sourceProfileUrl: url,
+        sourceProfileData: { username, ...profileData },
+        sourceProfilePosts: posts,
         lastAnalyzedAt: new Date(),
       });
 

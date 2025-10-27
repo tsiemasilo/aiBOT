@@ -41,8 +41,10 @@ export type ScheduleSettings = typeof scheduleSettings.$inferSelect;
 export const automationSettings = pgTable("automation_settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   enabled: boolean("enabled").notNull().default(false),
-  profileUrl: text("profile_url"),
-  analyzedData: jsonb("analyzed_data"),
+  sourceProfileUrl: text("source_profile_url"),
+  sourceProfileData: jsonb("source_profile_data"),
+  sourceProfilePosts: jsonb("source_profile_posts"),
+  isProfileConfirmed: boolean("is_profile_confirmed").notNull().default(false),
   lastAnalyzedAt: timestamp("last_analyzed_at"),
   updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
 });

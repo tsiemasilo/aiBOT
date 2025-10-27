@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { AutomationToggle } from "@/components/AutomationToggle";
-import { ContentStyleAnalyzer } from "@/components/ContentStyleAnalyzer";
+import { ProfileSelector } from "@/components/ProfileSelector";
 import { ScheduleConfig } from "@/components/ScheduleConfig";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertCircle, Instagram, CheckCircle2, Settings } from "lucide-react";
@@ -65,7 +65,7 @@ export default function Automation() {
         <div>
           <h1 className="text-3xl font-semibold">Automation</h1>
           <p className="text-muted-foreground mt-1">
-            Set up automatic posting with AI-generated content based on analyzed profiles
+            Automatically repost content from any Instagram profile with AI-paraphrased captions
           </p>
         </div>
 
@@ -137,7 +137,7 @@ export default function Automation() {
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Automation is currently disabled</AlertTitle>
             <AlertDescription>
-              Enable automation below to start auto-posting. Make sure to configure your schedule and analyze a profile for content inspiration first.
+              Enable automation below to start auto-posting. Make sure to configure your schedule and confirm a source profile first.
             </AlertDescription>
           </Alert>
         )}
@@ -150,7 +150,7 @@ export default function Automation() {
         <Tabs defaultValue="content" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="content" data-testid="tab-content-style">
-              Content Style
+              Source Profile
             </TabsTrigger>
             <TabsTrigger value="schedule" data-testid="tab-schedule">
               Posting Schedule
@@ -158,7 +158,7 @@ export default function Automation() {
           </TabsList>
           
           <TabsContent value="content" className="space-y-6 mt-6">
-            <ContentStyleAnalyzer />
+            <ProfileSelector />
           </TabsContent>
           
           <TabsContent value="schedule" className="space-y-6 mt-6">
@@ -180,19 +180,19 @@ export default function Automation() {
             <div className="space-y-3 text-sm text-muted-foreground">
               <div className="flex gap-3">
                 <span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-semibold">1</span>
-                <p>The system analyzes the content style from the Instagram profile you provided</p>
+                <p>Select and confirm a source Instagram profile to repost content from</p>
               </div>
               <div className="flex gap-3">
                 <span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-semibold">2</span>
-                <p>AI generates similar content matching the analyzed style, hashtags, and posting patterns</p>
+                <p>The system randomly selects posts from the source profile's feed</p>
               </div>
               <div className="flex gap-3">
                 <span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-semibold">3</span>
-                <p>Posts are automatically scheduled based on your configured posting times and frequency</p>
+                <p>AI paraphrases the captions to match the source profile's style and lingo</p>
               </div>
               <div className="flex gap-3">
                 <span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-semibold">4</span>
-                <p>Content is published to your Instagram profile at the scheduled times</p>
+                <p>Content is automatically posted to your connected Instagram account at scheduled times</p>
               </div>
             </div>
           </div>
