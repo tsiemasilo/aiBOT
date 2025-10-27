@@ -10,7 +10,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import Dashboard from "@/pages/Dashboard";
 import Schedule from "@/pages/Schedule";
 import Create from "@/pages/Create";
-import Analyzer from "@/pages/Analyzer";
+import Automation from "@/pages/Automation";
 import Analytics from "@/pages/Analytics";
 import NotFound from "@/pages/not-found";
 
@@ -20,7 +20,7 @@ function Router() {
       <Route path="/" component={Dashboard} />
       <Route path="/schedule" component={Schedule} />
       <Route path="/create" component={Create} />
-      <Route path="/analyzer" component={Analyzer} />
+      <Route path="/automation" component={Automation} />
       <Route path="/analytics" component={Analytics} />
       <Route component={NotFound} />
     </Switch>

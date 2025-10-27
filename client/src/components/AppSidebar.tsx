@@ -36,8 +36,8 @@ const menuItems = [
     icon: Image,
   },
   {
-    title: "Profile Analyzer",
-    url: "/analyzer",
+    title: "Automation",
+    url: "/automation",
     icon: Search,
   },
   {
