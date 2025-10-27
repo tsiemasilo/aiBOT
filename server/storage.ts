@@ -5,6 +5,8 @@ import {
   type InsertScheduleSettings,
   type AutomationSettings,
   type InsertAutomationSettings,
+  type ConnectedAccount,
+  type InsertConnectedAccount,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
@@ -20,15 +22,23 @@ export interface IStorage {
   
   getAutomationSettings(): Promise<AutomationSettings | undefined>;
   saveAutomationSettings(settings: Partial<InsertAutomationSettings>): Promise<AutomationSettings>;
+  
+  getConnectedAccounts(): Promise<ConnectedAccount[]>;
+  getConnectedAccount(id: string): Promise<ConnectedAccount | undefined>;
+  createConnectedAccount(account: InsertConnectedAccount): Promise<ConnectedAccount>;
+  updateConnectedAccount(id: string, account: Partial<InsertConnectedAccount>): Promise<ConnectedAccount | undefined>;
+  deleteConnectedAccount(id: string): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
   private posts: Map<string, Post>;
   private scheduleSettings: ScheduleSettings | undefined;
   private automationSettings: AutomationSettings | undefined;
+  private connectedAccounts: Map<string, ConnectedAccount>;
 
   constructor() {
     this.posts = new Map();
+    this.connectedAccounts = new Map();
   }
 
   async getPosts(): Promise<Post[]> {
@@ -108,6 +118,50 @@ export class MemStorage implements IStorage {
     };
     this.automationSettings = saved;
     return saved;
+  }
+
+  async getConnectedAccounts(): Promise<ConnectedAccount[]> {
+    return Array.from(this.connectedAccounts.values()).sort(
+      (a, b) => new Date(b.connectedAt).getTime() - new Date(a.connectedAt).getTime()
+    );
+  }
+
+  async getConnectedAccount(id: string): Promise<ConnectedAccount | undefined> {
+    return this.connectedAccounts.get(id);
+  }
+
+  async createConnectedAccount(insertAccount: InsertConnectedAccount): Promise<ConnectedAccount> {
+    const id = randomUUID();
+    const account: ConnectedAccount = {
+      id,
+      platform: insertAccount.platform || "instagram",
+      username: insertAccount.username,
+      accessToken: insertAccount.accessToken || null,
+      refreshToken: insertAccount.refreshToken || null,
+      profileUrl: insertAccount.profileUrl || null,
+      profileImageUrl: insertAccount.profileImageUrl || null,
+      isActive: insertAccount.isActive ?? true,
+      connectedAt: new Date(),
+      lastSyncedAt: insertAccount.lastSyncedAt || null,
+    };
+    this.connectedAccounts.set(id, account);
+    return account;
+  }
+
+  async updateConnectedAccount(id: string, updates: Partial<InsertConnectedAccount>): Promise<ConnectedAccount | undefined> {
+    const account = this.connectedAccounts.get(id);
+    if (!account) return undefined;
+
+    const updatedAccount: ConnectedAccount = {
+      ...account,
+      ...updates,
+    };
+    this.connectedAccounts.set(id, updatedAccount);
+    return updatedAccount;
+  }
+
+  async deleteConnectedAccount(id: string): Promise<boolean> {
+    return this.connectedAccounts.delete(id);
   }
 }
 

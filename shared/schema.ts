@@ -54,3 +54,24 @@ export const insertAutomationSettingsSchema = createInsertSchema(automationSetti
 
 export type InsertAutomationSettings = z.infer<typeof insertAutomationSettingsSchema>;
 export type AutomationSettings = typeof automationSettings.$inferSelect;
+
+export const connectedAccounts = pgTable("connected_accounts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  platform: text("platform").notNull().default("instagram"),
+  username: text("username").notNull(),
+  accessToken: text("access_token"),
+  refreshToken: text("refresh_token"),
+  profileUrl: text("profile_url"),
+  profileImageUrl: text("profile_image_url"),
+  isActive: boolean("is_active").notNull().default(true),
+  connectedAt: timestamp("connected_at").notNull().default(sql`now()`),
+  lastSyncedAt: timestamp("last_synced_at"),
+});
+
+export const insertConnectedAccountSchema = createInsertSchema(connectedAccounts).omit({
+  id: true,
+  connectedAt: true,
+});
+
+export type InsertConnectedAccount = z.infer<typeof insertConnectedAccountSchema>;
+export type ConnectedAccount = typeof connectedAccounts.$inferSelect;

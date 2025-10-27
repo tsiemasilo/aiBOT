@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertPostSchema, insertScheduleSettingsSchema, insertAutomationSettingsSchema } from "@shared/schema";
+import { insertPostSchema, insertScheduleSettingsSchema, insertAutomationSettingsSchema, insertConnectedAccountSchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Post Management Routes
@@ -156,6 +156,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(analyzedData);
     } catch (error) {
       res.status(500).json({ error: "Failed to analyze profile" });
+    }
+  });
+
+  // Connected Accounts Routes
+  app.get("/api/accounts", async (req, res) => {
+    try {
+      const accounts = await storage.getConnectedAccounts();
+      res.json(accounts);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch connected accounts" });
+    }
+  });
+
+  app.get("/api/accounts/:id", async (req, res) => {
+    try {
+      const account = await storage.getConnectedAccount(req.params.id);
+      if (!account) {
+        return res.status(404).json({ error: "Account not found" });
+      }
+      res.json(account);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch account" });
+    }
+  });
+
+  app.post("/api/accounts", async (req, res) => {
+    try {
+      const validatedData = insertConnectedAccountSchema.parse(req.body);
+      const account = await storage.createConnectedAccount(validatedData);
+      res.status(201).json(account);
+    } catch (error) {
+      if (error instanceof Error) {
+        res.status(400).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: "Failed to connect account" });
+      }
+    }
+  });
+
+  app.patch("/api/accounts/:id", async (req, res) => {
+    try {
+      const account = await storage.updateConnectedAccount(req.params.id, req.body);
+      if (!account) {
+        return res.status(404).json({ error: "Account not found" });
+      }
+      res.json(account);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update account" });
+    }
+  });
+
+  app.delete("/api/accounts/:id", async (req, res) => {
+    try {
+      const deleted = await storage.deleteConnectedAccount(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Account not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete account" });
     }
   });
 
