@@ -186,8 +186,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validatedData = insertConnectedAccountSchema.parse(req.body);
       const account = await storage.createConnectedAccount(validatedData);
       res.status(201).json(account);
-    } catch (error) {
-      if (error instanceof Error) {
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        res.status(400).json({ error: "Invalid account data", details: error.errors });
+      } else if (error instanceof Error) {
         res.status(400).json({ error: error.message });
       } else {
         res.status(500).json({ error: "Failed to connect account" });
@@ -197,13 +199,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/accounts/:id", async (req, res) => {
     try {
-      const account = await storage.updateConnectedAccount(req.params.id, req.body);
+      const partialSchema = insertConnectedAccountSchema.partial();
+      const validatedData = partialSchema.parse(req.body);
+      const account = await storage.updateConnectedAccount(req.params.id, validatedData);
       if (!account) {
         return res.status(404).json({ error: "Account not found" });
       }
       res.json(account);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to update account" });
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        res.status(400).json({ error: "Invalid account data", details: error.errors });
+      } else if (error instanceof Error) {
+        res.status(400).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: "Failed to update account" });
+      }
     }
   });
 
