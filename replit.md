@@ -2,12 +2,13 @@
 
 ## Overview
 
-InstaScheduler is a full-stack Instagram automation platform that enables users to schedule posts, analyze Instagram profiles for content inspiration, and automate posting workflows. The application combines social media scheduling capabilities with AI-driven content analysis to help users maintain a consistent Instagram presence.
+InstaScheduler is a full-stack Instagram automation platform that enables users to schedule posts, repost content from other Instagram profiles, and automate posting workflows. The application combines social media scheduling capabilities with AI-driven caption paraphrasing to help users maintain a consistent Instagram presence.
 
 **Core Features:**
 - Post scheduling and management with calendar visualization
-- Instagram profile analysis for content inspiration
-- Automated posting based on analyzed content patterns
+- Instagram profile search and confirmation for reposting
+- Automated reposting with AI-paraphrased captions that match the source profile's style
+- Random post selection from confirmed source profiles
 - Analytics dashboard for tracking post performance
 - Configurable posting schedules with custom time slots
 
@@ -48,8 +49,12 @@ Preferred communication style: Simple, everyday language.
 **API Structure:**
 - `/api/posts` - CRUD operations for scheduled posts
 - `/api/schedule` - Schedule settings configuration
-- `/api/automation` - Automation settings and profile analysis
-- `/api/analyze-profile` - Instagram profile content analysis endpoint
+- `/api/automation` - Automation settings management
+- `/api/search-profile` - Search and preview Instagram profiles
+- `/api/confirm-profile` - Confirm a profile as the source for reposting
+- `/api/generate-repost` - Generate repost content with paraphrased captions
+- `/api/analyze-profile` - (Legacy) Instagram profile content analysis endpoint
+- `/api/accounts` - Connected Instagram accounts management
 
 **Data Validation:**
 - **Zod** schemas for runtime type validation
@@ -64,7 +69,7 @@ Preferred communication style: Simple, everyday language.
 - Database migrations managed through `drizzle-kit`
 
 **Schema Design:**
-Three main tables:
+Four main tables:
 1. **posts** - Stores scheduled/posted content with status tracking
    - Fields: id, imageUrl, caption, scheduledDate, status, createdAt
    - Status values: "scheduled", "posted", "failed"
@@ -73,9 +78,14 @@ Three main tables:
    - Fields: selectedDays (array), postsPerDay (integer), timeSlots (JSON)
    - Single-row configuration pattern
 
-3. **automation_settings** - AI automation configuration
-   - Fields: enabled (boolean), profileUrl, analyzedData (JSON), lastAnalyzedAt
+3. **automation_settings** - Reposting automation configuration
+   - Fields: enabled (boolean), sourceProfileUrl, sourceProfileData (JSON), sourceProfilePosts (JSON), isProfileConfirmed (boolean), lastAnalyzedAt
+   - Stores confirmed Instagram profile and all its posts for random selection
    - Single-row configuration pattern
+
+4. **connected_accounts** - User's connected Instagram accounts
+   - Fields: id, platform, username, accessToken, refreshToken, profileUrl, profileImageUrl, isActive, connectedAt, lastSyncedAt
+   - Stores OAuth credentials for posting to user's Instagram
 
 **In-Memory Fallback:**
 - `MemStorage` class provides in-memory implementation of storage interface
@@ -153,6 +163,17 @@ Currently implements session management infrastructure via `connect-pg-simple` b
 - TypeScript throughout with strict mode enabled
 - Shared types between frontend and backend via `/shared` directory
 - Runtime validation with Zod schemas
+
+### AI Integration
+- **OpenAI GPT-5** - Used for caption paraphrasing
+- `server/openai.ts` - OpenAI client configuration and helper functions
+- `paraphraseCaption()` - Analyzes source profile's writing style and paraphrases captions to match their tone, vocabulary, and lingo
+- Environment variable: `OPENAI_API_KEY`
+
+### External APIs
+- **RapidAPI Instagram Scraper** - Fetches Instagram profile data and posts
+- Endpoints: `get_ig_user_about.php`, `get_user_posts.php`
+- Environment variable: `RAPIDAPI_KEY`
 
 ### Mock Data
 Currently uses mock data for analytics and activity feeds. Future implementation will connect to actual Instagram API or analytics service.
