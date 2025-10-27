@@ -1,7 +1,18 @@
 import OpenAI from "openai";
 
-// the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+let openaiClient: OpenAI | null = null;
+
+function getOpenAIClient(): OpenAI {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY environment variable is not set. Please configure your OpenAI API key to use AI features.');
+  }
+  
+  if (!openaiClient) {
+    openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  }
+  
+  return openaiClient;
+}
 
 interface ParaphraseOptions {
   originalCaption: string;
@@ -13,6 +24,7 @@ export async function paraphraseCaption(options: ParaphraseOptions): Promise<str
   const { originalCaption, profileUsername, sampleCaptions } = options;
 
   try {
+    const openai = getOpenAIClient();
     const sampleCaptionsText = sampleCaptions.slice(0, 10).join('\n---\n');
     
     const response = await openai.chat.completions.create({
@@ -53,7 +65,6 @@ Return ONLY the paraphrased caption, nothing else. Keep it natural and authentic
     return response.choices[0].message.content?.trim() || originalCaption;
   } catch (error) {
     console.error('Caption paraphrasing error:', error);
-    // Fallback to original caption if paraphrasing fails
     return originalCaption;
   }
 }
@@ -66,6 +77,7 @@ export async function analyzeProfileStyle(captions: string[]): Promise<{
   hashtagStyle: string;
 }> {
   try {
+    const openai = getOpenAIClient();
     const captionsText = captions.slice(0, 20).join('\n---\n');
     
     const response = await openai.chat.completions.create({
