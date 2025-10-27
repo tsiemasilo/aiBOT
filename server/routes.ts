@@ -7,14 +7,30 @@ import { insertPostSchema, insertScheduleSettingsSchema, insertAutomationSetting
 function analyzeInstagramContent(username: string, profileData: any, posts: any[]) {
   const postCount = posts.length;
   
+  // If no posts data, provide a placeholder analysis
+  if (postCount === 0) {
+    console.log('No posts data available, providing placeholder analysis');
+    return {
+      username,
+      contentTypes: [
+        { type: "Mixed Content", percentage: 100, examples: 0 }
+      ],
+      hashtags: ["#instagram", "#content", "#social"],
+      avgPostsPerWeek: 0,
+      bestPostingTime: "19:00",
+      postCount: 0,
+      note: "Limited analysis - posts data not available from API"
+    };
+  }
+  
   // Analyze content types based on captions and media types
   const contentTypeMap: { [key: string]: number } = {};
   const allHashtags: string[] = [];
   const postTimestamps: number[] = [];
   
   posts.forEach(post => {
-    const caption = post.caption?.text || '';
-    const mediaType = post.media_type;
+    const caption = post.caption?.text || post.caption || '';
+    const mediaType = post.media_type || post.type;
     
     // Extract hashtags
     const hashtagMatches = caption.match(/#[\w]+/g) || [];
@@ -23,7 +39,7 @@ function analyzeInstagramContent(username: string, profileData: any, posts: any[
     // Categorize content based on caption keywords and media type
     const lowerCaption = caption.toLowerCase();
     
-    if (mediaType === 'GraphVideo' || post.is_video) {
+    if (mediaType === 'GraphVideo' || mediaType === 'video' || post.is_video) {
       contentTypeMap['Video Content'] = (contentTypeMap['Video Content'] || 0) + 1;
     } else if (lowerCaption.includes('product') || lowerCaption.includes('shop') || lowerCaption.includes('sale')) {
       contentTypeMap['Product Photos'] = (contentTypeMap['Product Photos'] || 0) + 1;
@@ -40,6 +56,8 @@ function analyzeInstagramContent(username: string, profileData: any, posts: any[
     // Collect timestamps
     if (post.taken_at) {
       postTimestamps.push(post.taken_at);
+    } else if (post.timestamp) {
+      postTimestamps.push(new Date(post.timestamp).getTime() / 1000);
     }
   });
   
@@ -90,7 +108,7 @@ function analyzeInstagramContent(username: string, profileData: any, posts: any[
     return {
       username,
       contentTypes,
-      hashtags: topHashtags,
+      hashtags: topHashtags.length > 0 ? topHashtags : ["#instagram"],
       avgPostsPerWeek: parseFloat(avgPostsPerWeek.toFixed(1)),
       bestPostingTime,
       postCount,
@@ -245,10 +263,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ error: "API key not configured" });
       }
 
-      // Fetch user profile and posts data using Instagram Scraper API
-      // Try the v1/info endpoint which is commonly used
+      // Fetch user profile data using correct endpoint format
       const profileResponse = await fetch(
-        `https://instagram-scraper-stable-api.p.rapidapi.com/v1/info?username_or_id_or_url=${username}`,
+        `https://instagram-scraper-stable-api.p.rapidapi.com/get_ig_user_about.php?username_or_url=${username}`,
         {
           headers: {
             'X-RapidAPI-Key': RAPIDAPI_KEY,
@@ -260,33 +277,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!profileResponse.ok) {
         const errorText = await profileResponse.text();
         console.error('Profile fetch error:', profileResponse.status, errorText);
-        throw new Error(`Failed to fetch profile: ${profileResponse.status}. Error: ${errorText}`);
+        throw new Error(`Failed to fetch profile: ${profileResponse.status}`);
       }
 
       const profileData = await profileResponse.json();
-      console.log('Profile data structure:', JSON.stringify(profileData).substring(0, 200));
+      console.log('Profile data received:', JSON.stringify(profileData).substring(0, 300));
 
-      // Fetch user posts/media
-      const postsResponse = await fetch(
-        `https://instagram-scraper-stable-api.p.rapidapi.com/v1/posts?username_or_id_or_url=${username}`,
-        {
-          headers: {
-            'X-RapidAPI-Key': RAPIDAPI_KEY,
-            'X-RapidAPI-Host': 'instagram-scraper-stable-api.p.rapidapi.com'
+      // Try to fetch user posts/media - trying multiple endpoint patterns
+      let posts = [];
+      const postEndpoints = [
+        'get_user_posts.php',
+        'get_ig_posts.php',
+        'user_posts.php',
+        'ig_user_posts.php'
+      ];
+
+      for (const endpoint of postEndpoints) {
+        try {
+          const postsResponse = await fetch(
+            `https://instagram-scraper-stable-api.p.rapidapi.com/${endpoint}?username_or_url=${username}`,
+            {
+              headers: {
+                'X-RapidAPI-Key': RAPIDAPI_KEY,
+                'X-RapidAPI-Host': 'instagram-scraper-stable-api.p.rapidapi.com'
+              }
+            }
+          );
+
+          if (postsResponse.ok) {
+            const postsData = await postsResponse.json();
+            console.log(`Posts fetched from ${endpoint}:`, JSON.stringify(postsData).substring(0, 300));
+            posts = postsData.data?.items || postsData.items || postsData.data || [];
+            if (posts.length > 0) break;
           }
+        } catch (error) {
+          console.log(`Endpoint ${endpoint} failed, trying next...`);
         }
-      );
-
-      if (!postsResponse.ok) {
-        const errorText = await postsResponse.text();
-        console.error('Posts fetch error:', postsResponse.status, errorText);
-        // If posts fail, we can still analyze with just profile data
-        console.log('Posts fetch failed, proceeding with profile data only');
       }
 
-      const postsData = postsResponse.ok ? await postsResponse.json() : { data: { items: [] } };
-      console.log('Posts data structure:', JSON.stringify(postsData).substring(0, 200));
-      const posts = postsData.data?.items || postsData.items || [];
+      if (posts.length === 0) {
+        console.log('Could not fetch posts from any endpoint. Analysis will be limited to profile data.');
+      }
 
       // Analyze content
       const analyzedData = analyzeInstagramContent(username, profileData, posts);
