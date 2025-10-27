@@ -171,54 +171,64 @@ export class MemStorage implements IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
-  private db: any;
+  private dbInstance: any = null;
 
-  constructor() {
-    const { db } = require("./db");
-    this.db = db;
+  private async getDb() {
+    if (!this.dbInstance) {
+      const { db } = await import("./db.js");
+      this.dbInstance = db;
+    }
+    return this.dbInstance;
   }
 
   async getPosts(): Promise<Post[]> {
-    return this.db.select().from(posts).orderBy(posts.scheduledDate);
+    const db = await this.getDb();
+    return db.select().from(posts).orderBy(posts.scheduledDate);
   }
 
   async getPost(id: string): Promise<Post | undefined> {
-    const [post] = await this.db.select().from(posts).where(eq(posts.id, id));
+    const db = await this.getDb();
+    const [post] = await db.select().from(posts).where(eq(posts.id, id));
     return post || undefined;
   }
 
   async createPost(insertPost: InsertPost): Promise<Post> {
-    const [post] = await this.db.insert(posts).values(insertPost).returning();
+    const db = await this.getDb();
+    const [post] = await db.insert(posts).values(insertPost).returning();
     return post;
   }
 
   async updatePost(id: string, updates: Partial<InsertPost>): Promise<Post | undefined> {
-    const [post] = await this.db.update(posts).set(updates).where(eq(posts.id, id)).returning();
+    const db = await this.getDb();
+    const [post] = await db.update(posts).set(updates).where(eq(posts.id, id)).returning();
     return post || undefined;
   }
 
   async deletePost(id: string): Promise<boolean> {
-    const result = await this.db.delete(posts).where(eq(posts.id, id));
+    const db = await this.getDb();
+    const result = await db.delete(posts).where(eq(posts.id, id));
     return result.rowCount !== null && result.rowCount > 0;
   }
 
   async getScheduleSettings(): Promise<ScheduleSettings | undefined> {
-    const [settings] = await this.db.select().from(scheduleSettings).limit(1);
+    const db = await this.getDb();
+    const [settings] = await db.select().from(scheduleSettings).limit(1);
     return settings || undefined;
   }
 
   async saveScheduleSettings(settings: InsertScheduleSettings): Promise<ScheduleSettings> {
+    const db = await this.getDb();
     const existing = await this.getScheduleSettings();
     
     if (existing) {
-      const [updated] = await this.db
+      const [updated] = await db
         .update(scheduleSettings)
         .set({ ...settings, updatedAt: new Date() })
         .where(eq(scheduleSettings.id, existing.id))
         .returning();
       return updated;
     } else {
-      const [created] = await this.db
+      const [created] = await db
         .insert(scheduleSettings)
         .values({ ...settings, updatedAt: new Date() })
         .returning();
@@ -227,22 +237,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAutomationSettings(): Promise<AutomationSettings | undefined> {
-    const [settings] = await this.db.select().from(automationSettings).limit(1);
+    const db = await this.getDb();
+    const [settings] = await db.select().from(automationSettings).limit(1);
     return settings || undefined;
   }
 
   async saveAutomationSettings(settings: Partial<InsertAutomationSettings>): Promise<AutomationSettings> {
+    const db = await this.getDb();
     const existing = await this.getAutomationSettings();
     
     if (existing) {
-      const [updated] = await this.db
+      const [updated] = await db
         .update(automationSettings)
         .set({ ...settings, updatedAt: new Date() })
         .where(eq(automationSettings.id, existing.id))
         .returning();
       return updated;
     } else {
-      const [created] = await this.db
+      const [created] = await db
         .insert(automationSettings)
         .values({ ...settings, updatedAt: new Date() })
         .returning();
@@ -251,21 +263,25 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getConnectedAccounts(): Promise<ConnectedAccount[]> {
-    return this.db.select().from(connectedAccounts).orderBy(desc(connectedAccounts.connectedAt));
+    const db = await this.getDb();
+    return db.select().from(connectedAccounts).orderBy(desc(connectedAccounts.connectedAt));
   }
 
   async getConnectedAccount(id: string): Promise<ConnectedAccount | undefined> {
-    const [account] = await this.db.select().from(connectedAccounts).where(eq(connectedAccounts.id, id));
+    const db = await this.getDb();
+    const [account] = await db.select().from(connectedAccounts).where(eq(connectedAccounts.id, id));
     return account || undefined;
   }
 
   async createConnectedAccount(insertAccount: InsertConnectedAccount): Promise<ConnectedAccount> {
-    const [account] = await this.db.insert(connectedAccounts).values(insertAccount).returning();
+    const db = await this.getDb();
+    const [account] = await db.insert(connectedAccounts).values(insertAccount).returning();
     return account;
   }
 
   async updateConnectedAccount(id: string, updates: Partial<InsertConnectedAccount>): Promise<ConnectedAccount | undefined> {
-    const [account] = await this.db
+    const db = await this.getDb();
+    const [account] = await db
       .update(connectedAccounts)
       .set(updates)
       .where(eq(connectedAccounts.id, id))
@@ -274,7 +290,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteConnectedAccount(id: string): Promise<boolean> {
-    const result = await this.db.delete(connectedAccounts).where(eq(connectedAccounts.id, id));
+    const db = await this.getDb();
+    const result = await db.delete(connectedAccounts).where(eq(connectedAccounts.id, id));
     return result.rowCount !== null && result.rowCount > 0;
   }
 }
