@@ -32,7 +32,7 @@ export function ContentStyleAnalyzer() {
 
   const analyzeMutation = useMutation({
     mutationFn: async (profileUrl: string) => {
-      const response = await apiRequest("POST", "/api/analyze-profile", { profileUrl });
+      const response = await apiRequest("POST", "/api/analyze-profile", { url: profileUrl });
       return response.json();
     },
     onSuccess: (data) => {
