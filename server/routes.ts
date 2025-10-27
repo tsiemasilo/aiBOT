@@ -245,9 +245,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ error: "API key not configured" });
       }
 
-      // Fetch user profile and posts data
+      // Fetch user profile and posts data using Instagram Scraper API
+      // Try the v1/info endpoint which is commonly used
       const profileResponse = await fetch(
-        `https://instagram-scraper-stable-api.p.rapidapi.com/userinfo?username=${username}`,
+        `https://instagram-scraper-stable-api.p.rapidapi.com/v1/info?username_or_id_or_url=${username}`,
         {
           headers: {
             'X-RapidAPI-Key': RAPIDAPI_KEY,
@@ -259,14 +260,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!profileResponse.ok) {
         const errorText = await profileResponse.text();
         console.error('Profile fetch error:', profileResponse.status, errorText);
-        throw new Error(`Failed to fetch profile: ${profileResponse.status}. Please ensure you're subscribed to the Instagram Scraper Stable API on RapidAPI.`);
+        throw new Error(`Failed to fetch profile: ${profileResponse.status}. Error: ${errorText}`);
       }
 
       const profileData = await profileResponse.json();
+      console.log('Profile data structure:', JSON.stringify(profileData).substring(0, 200));
 
       // Fetch user posts/media
       const postsResponse = await fetch(
-        `https://instagram-scraper-stable-api.p.rapidapi.com/usermedia?username=${username}`,
+        `https://instagram-scraper-stable-api.p.rapidapi.com/v1/posts?username_or_id_or_url=${username}`,
         {
           headers: {
             'X-RapidAPI-Key': RAPIDAPI_KEY,
@@ -278,11 +280,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!postsResponse.ok) {
         const errorText = await postsResponse.text();
         console.error('Posts fetch error:', postsResponse.status, errorText);
-        throw new Error(`Failed to fetch posts: ${postsResponse.status}`);
+        // If posts fail, we can still analyze with just profile data
+        console.log('Posts fetch failed, proceeding with profile data only');
       }
 
-      const postsData = await postsResponse.json();
-      const posts = postsData.data?.items || [];
+      const postsData = postsResponse.ok ? await postsResponse.json() : { data: { items: [] } };
+      console.log('Posts data structure:', JSON.stringify(postsData).substring(0, 200));
+      const posts = postsData.data?.items || postsData.items || [];
 
       // Analyze content
       const analyzedData = analyzeInstagramContent(username, profileData, posts);
