@@ -253,14 +253,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Profile URL is required" });
       }
 
+      const urlPattern = /^https?:\/\/(www\.)?instagram\.com\//i;
+      if (!urlPattern.test(url)) {
+        return res.status(400).json({ error: "Please provide a valid Instagram URL" });
+      }
+
       const username = url.split('/').filter(Boolean).pop()?.replace('@', '') || '';
-      if (!username) {
-        return res.status(400).json({ error: "Invalid Instagram URL" });
+      if (!username || username.length > 30 || !/^[a-zA-Z0-9._]+$/.test(username)) {
+        return res.status(400).json({ error: "Invalid Instagram username format" });
       }
 
       const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
       if (!RAPIDAPI_KEY) {
-        return res.status(500).json({ error: "API key not configured" });
+        return res.status(503).json({ error: "Profile analysis service is currently unavailable" });
       }
 
       // Fetch user profile data using correct endpoint format
