@@ -3,6 +3,113 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertPostSchema, insertScheduleSettingsSchema, insertAutomationSettingsSchema, insertConnectedAccountSchema } from "@shared/schema";
 
+// Helper function to analyze Instagram content
+function analyzeInstagramContent(username: string, profileData: any, posts: any[]) {
+  const postCount = posts.length;
+  
+  // Analyze content types based on captions and media types
+  const contentTypeMap: { [key: string]: number } = {};
+  const allHashtags: string[] = [];
+  const postTimestamps: number[] = [];
+  
+  posts.forEach(post => {
+    const caption = post.caption?.text || '';
+    const mediaType = post.media_type;
+    
+    // Extract hashtags
+    const hashtagMatches = caption.match(/#[\w]+/g) || [];
+    allHashtags.push(...hashtagMatches);
+    
+    // Categorize content based on caption keywords and media type
+    const lowerCaption = caption.toLowerCase();
+    
+    if (mediaType === 'GraphVideo' || post.is_video) {
+      contentTypeMap['Video Content'] = (contentTypeMap['Video Content'] || 0) + 1;
+    } else if (lowerCaption.includes('product') || lowerCaption.includes('shop') || lowerCaption.includes('sale')) {
+      contentTypeMap['Product Photos'] = (contentTypeMap['Product Photos'] || 0) + 1;
+    } else if (lowerCaption.includes('quote') || lowerCaption.includes('motivation') || caption.split(' ').length < 10) {
+      contentTypeMap['Quotes & Text'] = (contentTypeMap['Quotes & Text'] || 0) + 1;
+    } else if (lowerCaption.includes('behind') || lowerCaption.includes('making') || lowerCaption.includes('process')) {
+      contentTypeMap['Behind the Scenes'] = (contentTypeMap['Behind the Scenes'] || 0) + 1;
+    } else if (lowerCaption.includes('repost') || lowerCaption.includes('credit') || lowerCaption.includes('via')) {
+      contentTypeMap['User Generated'] = (contentTypeMap['User Generated'] || 0) + 1;
+    } else {
+      contentTypeMap['Lifestyle Shots'] = (contentTypeMap['Lifestyle Shots'] || 0) + 1;
+    }
+    
+    // Collect timestamps
+    if (post.taken_at) {
+      postTimestamps.push(post.taken_at);
+    }
+  });
+  
+  // Calculate content type percentages
+  const contentTypes = Object.entries(contentTypeMap).map(([type, count]) => ({
+    type,
+    percentage: Math.round((count / postCount) * 100),
+    examples: count
+  })).sort((a, b) => b.percentage - a.percentage);
+  
+  // Get top hashtags
+  const hashtagFrequency: { [key: string]: number } = {};
+  allHashtags.forEach(tag => {
+    const normalized = tag.toLowerCase();
+    hashtagFrequency[normalized] = (hashtagFrequency[normalized] || 0) + 1;
+  });
+  
+  const topHashtags = Object.entries(hashtagFrequency)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([tag]) => tag);
+  
+  // Calculate posting frequency
+  if (postTimestamps.length > 1) {
+    postTimestamps.sort((a, b) => b - a);
+    const oldestTimestamp = postTimestamps[postTimestamps.length - 1];
+    const newestTimestamp = postTimestamps[0];
+    const daysDiff = (newestTimestamp - oldestTimestamp) / (24 * 60 * 60);
+    const weeksDiff = daysDiff / 7;
+    const avgPostsPerWeek = weeksDiff > 0 ? postCount / weeksDiff : 0;
+    
+    // Find best posting time
+    const hours = postTimestamps.map(ts => {
+      const date = new Date(ts * 1000);
+      return date.getHours();
+    });
+    
+    const hourFrequency: { [key: number]: number } = {};
+    hours.forEach(hour => {
+      hourFrequency[hour] = (hourFrequency[hour] || 0) + 1;
+    });
+    
+    const bestHour = Object.entries(hourFrequency)
+      .sort((a, b) => b[1] - a[1])[0]?.[0] || 19;
+    
+    const bestPostingTime = `${bestHour.toString().padStart(2, '0')}:00`;
+    
+    return {
+      username,
+      contentTypes,
+      hashtags: topHashtags,
+      avgPostsPerWeek: parseFloat(avgPostsPerWeek.toFixed(1)),
+      bestPostingTime,
+      postCount,
+    };
+  }
+  
+  // Fallback if insufficient data
+  return {
+    username,
+    contentTypes: contentTypes.length > 0 ? contentTypes : [
+      { type: "General Content", percentage: 100, examples: postCount }
+    ],
+    hashtags: topHashtags.length > 0 ? topHashtags : ["#instagram"],
+    avgPostsPerWeek: 0,
+    bestPostingTime: "19:00",
+    postCount,
+  };
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Post Management Routes
   app.get("/api/posts", async (req, res) => {
@@ -128,23 +235,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Profile URL is required" });
       }
 
-      // Simulate profile analysis (in production, this would call Instagram API)
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      const username = url.split('/').filter(Boolean).pop()?.replace('@', '') || '';
+      if (!username) {
+        return res.status(400).json({ error: "Invalid Instagram URL" });
+      }
 
-      const analyzedData = {
-        username: url.split('/').pop() || 'username',
-        contentTypes: [
-          { type: "Product Photos", percentage: 35, examples: 18 },
-          { type: "Lifestyle Shots", percentage: 28, examples: 14 },
-          { type: "Quotes & Text", percentage: 20, examples: 10 },
-          { type: "Behind the Scenes", percentage: 12, examples: 6 },
-          { type: "User Generated", percentage: 5, examples: 2 },
-        ],
-        hashtags: ["#fashion", "#style", "#ootd", "#inspo", "#lifestyle", "#aesthetic", "#trend", "#vibes"],
-        avgPostsPerWeek: 5.2,
-        bestPostingTime: "19:00",
-        postCount: 50,
-      };
+      const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
+      if (!RAPIDAPI_KEY) {
+        return res.status(500).json({ error: "API key not configured" });
+      }
+
+      // Fetch user profile data
+      const profileResponse = await fetch(
+        `https://instagram-scraper-stable-api.p.rapidapi.com/user?username=${username}`,
+        {
+          headers: {
+            'X-RapidAPI-Key': RAPIDAPI_KEY,
+            'X-RapidAPI-Host': 'instagram-scraper-stable-api.p.rapidapi.com'
+          }
+        }
+      );
+
+      if (!profileResponse.ok) {
+        throw new Error(`Failed to fetch profile: ${profileResponse.status}`);
+      }
+
+      const profileData = await profileResponse.json();
+
+      // Fetch user posts
+      const postsResponse = await fetch(
+        `https://instagram-scraper-stable-api.p.rapidapi.com/user_posts?username=${username}`,
+        {
+          headers: {
+            'X-RapidAPI-Key': RAPIDAPI_KEY,
+            'X-RapidAPI-Host': 'instagram-scraper-stable-api.p.rapidapi.com'
+          }
+        }
+      );
+
+      if (!postsResponse.ok) {
+        throw new Error(`Failed to fetch posts: ${postsResponse.status}`);
+      }
+
+      const postsData = await postsResponse.json();
+      const posts = postsData.data?.items || [];
+
+      // Analyze content
+      const analyzedData = analyzeInstagramContent(username, profileData, posts);
 
       // Save analyzed data to automation settings
       await storage.saveAutomationSettings({
@@ -155,7 +292,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(analyzedData);
     } catch (error) {
-      res.status(500).json({ error: "Failed to analyze profile" });
+      console.error('Profile analysis error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : "Failed to analyze profile" 
+      });
     }
   });
 
