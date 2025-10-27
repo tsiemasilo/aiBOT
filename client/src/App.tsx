@@ -8,6 +8,7 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import Dashboard from "@/pages/Dashboard";
+import Create from "@/pages/Create";
 import Schedule from "@/pages/Schedule";
 import Automation from "@/pages/Automation";
 import Analytics from "@/pages/Analytics";
@@ -19,6 +20,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
+      <Route path="/create" component={Create} />
       <Route path="/schedule" component={Schedule} />
       <Route path="/automation" component={Automation} />
       <Route path="/analyzer" component={Analyzer} />

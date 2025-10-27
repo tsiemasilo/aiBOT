@@ -6,6 +6,7 @@ import {
   BarChart3,
   Settings as SettingsIcon,
   Sparkles,
+  Plus,
 } from "lucide-react";
 import {
   Sidebar,
@@ -25,6 +26,11 @@ const menuItems = [
     title: "Dashboard",
     url: "/",
     icon: Home,
+  },
+  {
+    title: "Create",
+    url: "/create",
+    icon: Plus,
   },
   {
     title: "Automation",
