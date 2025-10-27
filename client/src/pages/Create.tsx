@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,7 +13,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { format } from "date-fns";
-import { Calendar as CalendarIcon, Upload, X, Smartphone } from "lucide-react";
+import { Calendar as CalendarIcon, Upload, X, Smartphone, Loader2 } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -20,13 +22,41 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 
 export default function Create() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [date, setDate] = useState<Date>();
   const [time, setTime] = useState("09:00");
   const [caption, setCaption] = useState("");
   const [imagePreview, setImagePreview] = useState<string>();
+
+  const createPostMutation = useMutation({
+    mutationFn: async (postData: { imageUrl: string; caption: string; scheduledDate: string; status: string }) => {
+      const response = await apiRequest("POST", "/api/posts", postData);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
+      toast({
+        title: "Post Scheduled",
+        description: `Your post will be published on ${date ? format(date, "PPP") : ""} at ${time}`,
+      });
+      setDate(undefined);
+      setTime("09:00");
+      setCaption("");
+      setImagePreview(undefined);
+      setLocation("/");
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to schedule post. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -40,10 +70,17 @@ export default function Create() {
   };
 
   const handleSchedule = () => {
-    console.log("Scheduling post:", { date, time, caption, imagePreview });
-    toast({
-      title: "Post Scheduled",
-      description: `Your post will be published on ${date ? format(date, "PPP") : ""} at ${time}`,
+    if (!date || !imagePreview) return;
+
+    const [hours, minutes] = time.split(":");
+    const scheduledDate = new Date(date);
+    scheduledDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+
+    createPostMutation.mutate({
+      imageUrl: imagePreview,
+      caption,
+      scheduledDate: scheduledDate.toISOString(),
+      status: "scheduled",
     });
   };
 
@@ -179,10 +216,17 @@ export default function Create() {
                 <Button 
                   className="w-full" 
                   onClick={handleSchedule}
-                  disabled={!imagePreview || !date}
+                  disabled={!imagePreview || !date || createPostMutation.isPending}
                   data-testid="button-schedule-post"
                 >
-                  Schedule Post
+                  {createPostMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Scheduling...
+                    </>
+                  ) : (
+                    "Schedule Post"
+                  )}
                 </Button>
               </CardContent>
             </Card>

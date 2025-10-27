@@ -1,10 +1,10 @@
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
-import { Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { Plus, Trash2, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
 import {
   Select,
   SelectContent,
@@ -12,10 +12,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 
 interface TimeSlot {
   id: string;
   time: string;
+}
+
+interface ScheduleSettings {
+  selectedDays: string[];
+  postsPerDay: number;
+  timeSlots: TimeSlot[];
 }
 
 const DAYS = [
@@ -29,6 +37,7 @@ const DAYS = [
 ];
 
 export function ScheduleConfig() {
+  const { toast } = useToast();
   const [selectedDays, setSelectedDays] = useState<string[]>(["mon", "wed", "fri"]);
   const [postsPerDay, setPostsPerDay] = useState([3]);
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([
@@ -36,6 +45,43 @@ export function ScheduleConfig() {
     { id: "2", time: "14:00" },
     { id: "3", time: "19:00" },
   ]);
+
+  const { data: scheduleSettings, isLoading } = useQuery<ScheduleSettings>({
+    queryKey: ["/api/schedule"],
+  });
+
+  useEffect(() => {
+    if (scheduleSettings) {
+      setSelectedDays(scheduleSettings.selectedDays || ["mon", "wed", "fri"]);
+      setPostsPerDay([scheduleSettings.postsPerDay || 3]);
+      setTimeSlots(scheduleSettings.timeSlots || [
+        { id: "1", time: "09:00" },
+        { id: "2", time: "14:00" },
+        { id: "3", time: "19:00" },
+      ]);
+    }
+  }, [scheduleSettings]);
+
+  const saveSettingsMutation = useMutation({
+    mutationFn: async (settings: ScheduleSettings) => {
+      const response = await apiRequest("POST", "/api/schedule", settings);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/schedule"] });
+      toast({
+        title: "Schedule saved",
+        description: "Your posting schedule has been updated successfully.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to save schedule. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
 
   const toggleDay = (dayId: string) => {
     setSelectedDays((prev) =>
@@ -59,6 +105,26 @@ export function ScheduleConfig() {
       prev.map((slot) => (slot.id === id ? { ...slot, time } : slot))
     );
   };
+
+  const handleSave = () => {
+    saveSettingsMutation.mutate({
+      selectedDays,
+      postsPerDay: postsPerDay[0],
+      timeSlots,
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-center">
+            <p className="text-muted-foreground">Loading schedule settings...</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>
@@ -152,8 +218,20 @@ export function ScheduleConfig() {
           </p>
         </div>
 
-        <Button className="w-full" data-testid="button-save-schedule">
-          Save Schedule
+        <Button 
+          className="w-full" 
+          onClick={handleSave}
+          disabled={saveSettingsMutation.isPending}
+          data-testid="button-save-schedule"
+        >
+          {saveSettingsMutation.isPending ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            "Save Schedule"
+          )}
         </Button>
       </CardContent>
     </Card>

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { AnalyticsCard } from "@/components/AnalyticsCard";
 import { PostCard, Post } from "@/components/PostCard";
 import { ActivityFeed } from "@/components/ActivityFeed";
@@ -6,44 +7,48 @@ import { EmptyState } from "@/components/EmptyState";
 import { CreatePostDialog } from "@/components/CreatePostDialog";
 import { Calendar as CalendarIcon, Clock, CheckCircle, ImageIcon, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import emptyStateImage from "@assets/generated_images/Empty_state_calendar_illustration_0d8d2e82.png";
 
-// todo: remove mock functionality
-const MOCK_POSTS: Post[] = [
-  {
-    id: "1",
-    imageUrl: "",
-    caption: "New collection dropping soon! Stay tuned for exclusive previews. #fashion #newcollection",
-    scheduledDate: new Date(2025, 9, 30, 14, 0),
-    status: "scheduled",
-  },
-  {
-    id: "2",
-    imageUrl: "",
-    caption: "Behind the scenes of our latest photoshoot 📸 #BTS #photography",
-    scheduledDate: new Date(2025, 9, 31, 10, 0),
-    status: "scheduled",
-  },
-  {
-    id: "3",
-    imageUrl: "",
-    caption: "Weekend vibes ✨ What are your plans? #weekend #lifestyle",
-    scheduledDate: new Date(2025, 10, 1, 18, 0),
-    status: "scheduled",
-  },
-];
-
 export default function Dashboard() {
-  const [posts, setPosts] = useState<Post[]>(MOCK_POSTS);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const { toast } = useToast();
+
+  const { data: posts = [], isLoading } = useQuery<Post[]>({
+    queryKey: ["/api/posts"],
+    select: (data) => data.map(post => ({
+      ...post,
+      scheduledDate: new Date(post.scheduledDate)
+    }))
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/posts/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
+      toast({
+        title: "Post deleted",
+        description: "The post has been successfully deleted.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete post. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleEditPost = (id: string) => {
     console.log("Edit post:", id);
   };
 
   const handleDeletePost = (id: string) => {
-    setPosts(posts.filter(p => p.id !== id));
-    console.log("Delete post:", id);
+    deleteMutation.mutate(id);
   };
 
   const handleReschedulePost = (id: string) => {
@@ -104,7 +109,11 @@ export default function Dashboard() {
               View All
             </Button>
           </div>
-          {posts.length > 0 ? (
+          {isLoading ? (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">Loading posts...</p>
+            </div>
+          ) : posts.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {posts.map((post) => (
                 <PostCard

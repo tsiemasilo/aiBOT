@@ -1,8 +1,11 @@
+import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Zap, CheckCircle2, Clock } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 
 interface AutomationToggleProps {
   enabled: boolean;
@@ -10,6 +13,36 @@ interface AutomationToggleProps {
 }
 
 export function AutomationToggle({ enabled, onToggle }: AutomationToggleProps) {
+  const { toast } = useToast();
+
+  const toggleAutomationMutation = useMutation({
+    mutationFn: async (newEnabled: boolean) => {
+      const response = await apiRequest("POST", "/api/automation", { enabled: newEnabled });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/automation"] });
+      onToggle(data.enabled);
+      toast({
+        title: data.enabled ? "Automation enabled" : "Automation disabled",
+        description: data.enabled 
+          ? "Posts will be automatically created and scheduled" 
+          : "Automatic posting has been disabled",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update automation settings. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleToggle = (checked: boolean) => {
+    toggleAutomationMutation.mutate(checked);
+  };
+
   return (
     <Card className={enabled ? "border-primary" : ""}>
       <CardHeader>
@@ -41,7 +74,8 @@ export function AutomationToggle({ enabled, onToggle }: AutomationToggleProps) {
           <Switch
             id="automation-toggle"
             checked={enabled}
-            onCheckedChange={onToggle}
+            onCheckedChange={handleToggle}
+            disabled={toggleAutomationMutation.isPending}
             data-testid="switch-automation"
           />
         </div>

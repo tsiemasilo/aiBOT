@@ -1,0 +1,158 @@
+# InstaScheduler - Instagram Automation Platform
+
+## Overview
+
+InstaScheduler is a full-stack Instagram automation platform that enables users to schedule posts, analyze Instagram profiles for content inspiration, and automate posting workflows. The application combines social media scheduling capabilities with AI-driven content analysis to help users maintain a consistent Instagram presence.
+
+**Core Features:**
+- Post scheduling and management with calendar visualization
+- Instagram profile analysis for content inspiration
+- Automated posting based on analyzed content patterns
+- Analytics dashboard for tracking post performance
+- Configurable posting schedules with custom time slots
+
+## User Preferences
+
+Preferred communication style: Simple, everyday language.
+
+## System Architecture
+
+### Frontend Architecture
+
+**Framework & Build System:**
+- **React 18** with TypeScript for type-safe component development
+- **Vite** as the build tool and development server
+- **Wouter** for lightweight client-side routing
+- **TanStack Query (React Query)** for server state management, caching, and data fetching
+
+**UI Component System:**
+- **shadcn/ui** component library built on Radix UI primitives
+- **Tailwind CSS** for utility-first styling with custom design tokens
+- **New York** style variant from shadcn with customized color scheme
+- Theme system supporting light/dark modes via context provider
+- Design system documented in `design_guidelines.md` with specific typography, spacing, and layout standards
+
+**State Management:**
+- Server state managed through React Query with configured refetch policies
+- Local UI state handled via React hooks
+- Theme state persisted to localStorage
+
+### Backend Architecture
+
+**Server Framework:**
+- **Express.js** application with TypeScript
+- RESTful API design pattern
+- Session-based architecture (session middleware configured via `connect-pg-simple`)
+- Custom middleware for request logging and JSON response capture
+
+**API Structure:**
+- `/api/posts` - CRUD operations for scheduled posts
+- `/api/schedule` - Schedule settings configuration
+- `/api/automation` - Automation settings and profile analysis
+- `/api/analyze-profile` - Instagram profile content analysis endpoint
+
+**Data Validation:**
+- **Zod** schemas for runtime type validation
+- **drizzle-zod** integration for database schema validation
+- Input validation on API endpoints using schema parsing
+
+### Data Storage
+
+**Database:**
+- **PostgreSQL** as the primary database (via Neon serverless driver `@neondatabase/serverless`)
+- **Drizzle ORM** for type-safe database queries and schema management
+- Database migrations managed through `drizzle-kit`
+
+**Schema Design:**
+Three main tables:
+1. **posts** - Stores scheduled/posted content with status tracking
+   - Fields: id, imageUrl, caption, scheduledDate, status, createdAt
+   - Status values: "scheduled", "posted", "failed"
+
+2. **schedule_settings** - User's posting schedule configuration
+   - Fields: selectedDays (array), postsPerDay (integer), timeSlots (JSON)
+   - Single-row configuration pattern
+
+3. **automation_settings** - AI automation configuration
+   - Fields: enabled (boolean), profileUrl, analyzedData (JSON), lastAnalyzedAt
+   - Single-row configuration pattern
+
+**In-Memory Fallback:**
+- `MemStorage` class provides in-memory implementation of storage interface
+- Used for development/testing when database is unavailable
+
+### Authentication & Authorization
+
+Currently implements session management infrastructure via `connect-pg-simple` but user authentication flows are not yet implemented. The architecture is prepared for session-based authentication.
+
+### Code Organization
+
+**Monorepo Structure:**
+- `/client` - Frontend React application
+  - `/src/components` - Reusable UI components
+  - `/src/pages` - Route-level page components
+  - `/src/lib` - Utilities and shared logic
+  - `/src/hooks` - Custom React hooks
+- `/server` - Backend Express application
+  - `routes.ts` - API route definitions
+  - `storage.ts` - Data access layer
+  - `vite.ts` - Vite integration for development
+- `/shared` - Code shared between client and server
+  - `schema.ts` - Database schema and validation types
+
+**Path Aliases:**
+- `@/*` maps to `client/src/*`
+- `@shared/*` maps to `shared/*`
+- `@assets/*` maps to `attached_assets/*`
+
+### Build & Deployment
+
+**Development:**
+- Vite dev server with HMR
+- Express server with tsx runtime
+- Concurrent client/server development
+
+**Production:**
+- Client built to `dist/public` via Vite
+- Server bundled to `dist` via esbuild with ESM output
+- Static file serving for production builds
+
+## External Dependencies
+
+### UI Component Libraries
+- **Radix UI** - Headless component primitives for accessibility (Dialog, Dropdown, Popover, Select, etc.)
+- **Lucide React** - Icon library
+- **date-fns** - Date formatting and manipulation
+- **embla-carousel-react** - Carousel component functionality
+- **cmdk** - Command palette component
+- **vaul** - Drawer component
+- **react-day-picker** - Calendar/date picker
+- **recharts** - Charting library for analytics
+
+### Styling & Theming
+- **Tailwind CSS** with PostCSS
+- **class-variance-authority** - Type-safe component variants
+- **tailwind-merge** & **clsx** - Conditional class name utilities
+- **Google Fonts** - Inter (primary) and JetBrains Mono (monospace)
+
+### Development Tools
+- **@replit/vite-plugin-runtime-error-modal** - Error overlay for development
+- **@replit/vite-plugin-cartographer** - Replit-specific development tooling
+- **@replit/vite-plugin-dev-banner** - Development environment banner
+
+### Database & ORM
+- **@neondatabase/serverless** - Serverless PostgreSQL driver
+- **drizzle-orm** - TypeScript ORM
+- **drizzle-kit** - Schema migration tool
+
+### Form Handling
+- **react-hook-form** - Form state management
+- **@hookform/resolvers** - Form validation resolvers for Zod integration
+
+### Type Safety
+- TypeScript throughout with strict mode enabled
+- Shared types between frontend and backend via `/shared` directory
+- Runtime validation with Zod schemas
+
+### Mock Data
+Currently uses mock data for analytics and activity feeds. Future implementation will connect to actual Instagram API or analytics service.

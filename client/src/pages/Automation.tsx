@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
 import { AutomationToggle } from "@/components/AutomationToggle";
 import { ContentStyleAnalyzer } from "@/components/ContentStyleAnalyzer";
 import { ScheduleConfig } from "@/components/ScheduleConfig";
@@ -6,8 +7,37 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
+interface AutomationSettings {
+  enabled: boolean;
+  profileUrl?: string | null;
+  analyzedData?: any;
+  lastAnalyzedAt?: string | null;
+}
+
 export default function Automation() {
   const [automationEnabled, setAutomationEnabled] = useState(false);
+
+  const { data: automationSettings, isLoading } = useQuery<AutomationSettings>({
+    queryKey: ["/api/automation"],
+  });
+
+  useEffect(() => {
+    if (automationSettings) {
+      setAutomationEnabled(automationSettings.enabled || false);
+    }
+  }, [automationSettings]);
+
+  if (isLoading) {
+    return (
+      <div className="p-6">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center py-12">
+            <p className="text-muted-foreground">Loading automation settings...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6">

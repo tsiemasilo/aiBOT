@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -6,6 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Search, Loader2, Sparkles, ImageIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 interface ContentType {
   type: string;
@@ -14,12 +17,45 @@ interface ContentType {
   examples: number;
 }
 
+interface AnalysisResult {
+  contentTypes: ContentType[];
+  hashtags: string[];
+  avgPostsPerWeek: number;
+  bestTime: string;
+  username: string;
+}
+
 export function ContentStyleAnalyzer() {
+  const { toast } = useToast();
   const [url, setUrl] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [analyzed, setAnalyzed] = useState(false);
-  
-  const contentTypes: ContentType[] = [
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+
+  const analyzeMutation = useMutation({
+    mutationFn: async (profileUrl: string) => {
+      const response = await apiRequest("POST", "/api/analyze-profile", { profileUrl });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setAnalysisResult(data);
+      toast({
+        title: "Analysis complete",
+        description: `Successfully analyzed @${data.username || "username"}'s profile`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to analyze profile. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleAnalyze = () => {
+    analyzeMutation.mutate(url);
+  };
+
+  const contentTypes: ContentType[] = analysisResult?.contentTypes || [
     { type: "Product Photos", percentage: 35, color: "bg-purple-500", examples: 18 },
     { type: "Lifestyle Shots", percentage: 28, color: "bg-orange-500", examples: 14 },
     { type: "Quotes & Text", percentage: 20, color: "bg-blue-500", examples: 10 },
@@ -27,14 +63,7 @@ export function ContentStyleAnalyzer() {
     { type: "User Generated", percentage: 5, color: "bg-pink-500", examples: 2 },
   ];
 
-  const handleAnalyze = () => {
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      setAnalyzed(true);
-      console.log("Analyzing profile:", url);
-    }, 2000);
-  };
+  const hashtags = analysisResult?.hashtags || ["#fashion", "#style", "#ootd", "#inspo", "#lifestyle", "#aesthetic", "#trend", "#vibes"];
 
   return (
     <div className="space-y-6">
@@ -59,8 +88,12 @@ export function ContentStyleAnalyzer() {
                 onChange={(e) => setUrl(e.target.value)}
                 data-testid="input-profile-url"
               />
-              <Button onClick={handleAnalyze} disabled={!url || loading} data-testid="button-analyze">
-                {loading ? (
+              <Button 
+                onClick={handleAnalyze} 
+                disabled={!url || analyzeMutation.isPending} 
+                data-testid="button-analyze"
+              >
+                {analyzeMutation.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Analyzing
@@ -80,13 +113,13 @@ export function ContentStyleAnalyzer() {
         </CardContent>
       </Card>
 
-      {analyzed && (
+      {analysisResult && (
         <>
           <Card>
             <CardHeader>
               <CardTitle>Content Style Breakdown</CardTitle>
               <CardDescription>
-                Analyzed 50 recent posts from @username
+                Analyzed 50 recent posts from @{analysisResult.username || "username"}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -108,7 +141,7 @@ export function ContentStyleAnalyzer() {
               <div className="pt-4 border-t">
                 <p className="text-sm font-medium mb-3">Popular Hashtags</p>
                 <div className="flex flex-wrap gap-2">
-                  {["#fashion", "#style", "#ootd", "#inspo", "#lifestyle", "#aesthetic", "#trend", "#vibes"].map((tag) => (
+                  {hashtags.map((tag) => (
                     <Badge key={tag} variant="secondary" data-testid={`badge-hashtag-${tag.slice(1)}`}>
                       {tag}
                     </Badge>
@@ -121,11 +154,11 @@ export function ContentStyleAnalyzer() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="p-3 bg-muted rounded-md">
                     <p className="text-xs text-muted-foreground mb-1">Avg. Posts/Week</p>
-                    <p className="text-2xl font-semibold">5.2</p>
+                    <p className="text-2xl font-semibold">{analysisResult.avgPostsPerWeek || 5.2}</p>
                   </div>
                   <div className="p-3 bg-muted rounded-md">
                     <p className="text-xs text-muted-foreground mb-1">Best Time</p>
-                    <p className="text-2xl font-semibold">7:00 PM</p>
+                    <p className="text-2xl font-semibold">{analysisResult.bestTime || "7:00 PM"}</p>
                   </div>
                 </div>
               </div>

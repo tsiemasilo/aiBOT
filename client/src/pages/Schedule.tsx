@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { ScheduleConfig } from "@/components/ScheduleConfig";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -5,28 +6,18 @@ import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
 import { Post } from "@/components/PostCard";
 
-// todo: remove mock functionality
-const MOCK_SCHEDULED_POSTS: Post[] = [
-  {
-    id: "1",
-    imageUrl: "",
-    caption: "Morning motivation post",
-    scheduledDate: new Date(2025, 9, 30, 9, 0),
-    status: "scheduled",
-  },
-  {
-    id: "2",
-    imageUrl: "",
-    caption: "Afternoon update",
-    scheduledDate: new Date(2025, 9, 30, 14, 0),
-    status: "scheduled",
-  },
-];
-
 export default function Schedule() {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
 
-  const postsForSelectedDate = MOCK_SCHEDULED_POSTS.filter(
+  const { data: posts = [], isLoading } = useQuery<Post[]>({
+    queryKey: ["/api/posts"],
+    select: (data) => data.map(post => ({
+      ...post,
+      scheduledDate: new Date(post.scheduledDate)
+    }))
+  });
+
+  const postsForSelectedDate = posts.filter(
     (post) =>
       selectedDate &&
       post.scheduledDate.toDateString() === selectedDate.toDateString()
@@ -70,7 +61,11 @@ export default function Schedule() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {postsForSelectedDate.length > 0 ? (
+                {isLoading ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    Loading posts...
+                  </p>
+                ) : postsForSelectedDate.length > 0 ? (
                   <div className="space-y-2">
                     {postsForSelectedDate.map((post) => (
                       <div

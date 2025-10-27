@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -19,7 +20,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { format } from "date-fns";
-import { Calendar as CalendarIcon, Upload, X } from "lucide-react";
+import { Calendar as CalendarIcon, Upload, X, Loader2 } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -27,6 +28,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 
 interface CreatePostDialogProps {
   trigger?: React.ReactNode;
@@ -35,10 +38,37 @@ interface CreatePostDialogProps {
 }
 
 export function CreatePostDialog({ trigger, open, onOpenChange }: CreatePostDialogProps) {
+  const { toast } = useToast();
   const [date, setDate] = useState<Date>();
   const [time, setTime] = useState("09:00");
   const [caption, setCaption] = useState("");
   const [imagePreview, setImagePreview] = useState<string>();
+
+  const createPostMutation = useMutation({
+    mutationFn: async (postData: { imageUrl: string; caption: string; scheduledDate: string; status: string }) => {
+      const response = await apiRequest("POST", "/api/posts", postData);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
+      toast({
+        title: "Post scheduled",
+        description: `Your post will be published on ${date ? format(date, "PPP") : ""} at ${time}`,
+      });
+      onOpenChange?.(false);
+      setDate(undefined);
+      setTime("09:00");
+      setCaption("");
+      setImagePreview(undefined);
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to schedule post. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -52,8 +82,18 @@ export function CreatePostDialog({ trigger, open, onOpenChange }: CreatePostDial
   };
 
   const handleSchedule = () => {
-    console.log("Scheduling post:", { date, time, caption, imagePreview });
-    onOpenChange?.(false);
+    if (!date || !imagePreview) return;
+
+    const [hours, minutes] = time.split(":");
+    const scheduledDate = new Date(date);
+    scheduledDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+
+    createPostMutation.mutate({
+      imageUrl: imagePreview,
+      caption,
+      scheduledDate: scheduledDate.toISOString(),
+      status: "scheduled",
+    });
   };
 
   return (
@@ -174,8 +214,19 @@ export function CreatePostDialog({ trigger, open, onOpenChange }: CreatePostDial
           <Button variant="outline" onClick={() => onOpenChange?.(false)} data-testid="button-cancel">
             Cancel
           </Button>
-          <Button onClick={handleSchedule} disabled={!imagePreview || !date} data-testid="button-schedule">
-            Schedule Post
+          <Button 
+            onClick={handleSchedule} 
+            disabled={!imagePreview || !date || createPostMutation.isPending} 
+            data-testid="button-schedule"
+          >
+            {createPostMutation.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Scheduling...
+              </>
+            ) : (
+              "Schedule Post"
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>
