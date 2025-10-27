@@ -1,4 +1,4 @@
-import { ProfileAnalyzer } from "@/components/ProfileAnalyzer";
+import { ContentStyleAnalyzer } from "@/components/ContentStyleAnalyzer";
 
 export default function Analyzer() {
   return (
@@ -11,7 +11,7 @@ export default function Analyzer() {
           </p>
         </div>
 
-        <ProfileAnalyzer />
+        <ContentStyleAnalyzer />
       </div>
     </div>
   );
