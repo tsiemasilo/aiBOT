@@ -7,8 +7,14 @@ import {
   type InsertAutomationSettings,
   type ConnectedAccount,
   type InsertConnectedAccount,
+  posts,
+  scheduleSettings,
+  automationSettings,
+  connectedAccounts,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
+import { db } from "./db";
+import { eq, desc } from "drizzle-orm";
 
 export interface IStorage {
   getPosts(): Promise<Post[]>;
@@ -165,4 +171,107 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+export class DatabaseStorage implements IStorage {
+  async getPosts(): Promise<Post[]> {
+    return db.select().from(posts).orderBy(posts.scheduledDate);
+  }
+
+  async getPost(id: string): Promise<Post | undefined> {
+    const [post] = await db.select().from(posts).where(eq(posts.id, id));
+    return post || undefined;
+  }
+
+  async createPost(insertPost: InsertPost): Promise<Post> {
+    const [post] = await db.insert(posts).values(insertPost).returning();
+    return post;
+  }
+
+  async updatePost(id: string, updates: Partial<InsertPost>): Promise<Post | undefined> {
+    const [post] = await db.update(posts).set(updates).where(eq(posts.id, id)).returning();
+    return post || undefined;
+  }
+
+  async deletePost(id: string): Promise<boolean> {
+    const result = await db.delete(posts).where(eq(posts.id, id));
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  async getScheduleSettings(): Promise<ScheduleSettings | undefined> {
+    const [settings] = await db.select().from(scheduleSettings).limit(1);
+    return settings || undefined;
+  }
+
+  async saveScheduleSettings(settings: InsertScheduleSettings): Promise<ScheduleSettings> {
+    const existing = await this.getScheduleSettings();
+    
+    if (existing) {
+      const [updated] = await db
+        .update(scheduleSettings)
+        .set({ ...settings, updatedAt: new Date() })
+        .where(eq(scheduleSettings.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(scheduleSettings)
+        .values({ ...settings, updatedAt: new Date() })
+        .returning();
+      return created;
+    }
+  }
+
+  async getAutomationSettings(): Promise<AutomationSettings | undefined> {
+    const [settings] = await db.select().from(automationSettings).limit(1);
+    return settings || undefined;
+  }
+
+  async saveAutomationSettings(settings: Partial<InsertAutomationSettings>): Promise<AutomationSettings> {
+    const existing = await this.getAutomationSettings();
+    
+    if (existing) {
+      const [updated] = await db
+        .update(automationSettings)
+        .set({ ...settings, updatedAt: new Date() })
+        .where(eq(automationSettings.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(automationSettings)
+        .values({ ...settings, updatedAt: new Date() })
+        .returning();
+      return created;
+    }
+  }
+
+  async getConnectedAccounts(): Promise<ConnectedAccount[]> {
+    return db.select().from(connectedAccounts).orderBy(desc(connectedAccounts.connectedAt));
+  }
+
+  async getConnectedAccount(id: string): Promise<ConnectedAccount | undefined> {
+    const [account] = await db.select().from(connectedAccounts).where(eq(connectedAccounts.id, id));
+    return account || undefined;
+  }
+
+  async createConnectedAccount(insertAccount: InsertConnectedAccount): Promise<ConnectedAccount> {
+    const [account] = await db.insert(connectedAccounts).values(insertAccount).returning();
+    return account;
+  }
+
+  async updateConnectedAccount(id: string, updates: Partial<InsertConnectedAccount>): Promise<ConnectedAccount | undefined> {
+    const [account] = await db
+      .update(connectedAccounts)
+      .set(updates)
+      .where(eq(connectedAccounts.id, id))
+      .returning();
+    return account || undefined;
+  }
+
+  async deleteConnectedAccount(id: string): Promise<boolean> {
+    const result = await db.delete(connectedAccounts).where(eq(connectedAccounts.id, id));
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+}
+
+// Use DatabaseStorage if DATABASE_URL is set, otherwise fallback to MemStorage
+export const storage = process.env.DATABASE_URL ? new DatabaseStorage() : new MemStorage();
