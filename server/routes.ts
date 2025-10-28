@@ -280,25 +280,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(503).json({ error: "Profile search service is currently unavailable" });
       }
 
-      // Fetch profile data
-      const profileResponse = await fetch(
-        `https://instagram-scraper-stable-api.p.rapidapi.com/get_ig_user_about.php?username_or_url=${username}`,
-        {
-          headers: {
-            'X-RapidAPI-Key': RAPIDAPI_KEY,
-            'X-RapidAPI-Host': 'instagram-scraper-stable-api.p.rapidapi.com'
-          }
-        }
-      );
-
-      if (!profileResponse.ok) {
-        throw new Error(`Failed to fetch profile: ${profileResponse.status}`);
-      }
-
-      const profileData = await profileResponse.json();
-
-      // Fetch recent posts for preview
-      let recentPosts = [];
+      // Fetch posts first - posts endpoint often includes profile data in the user field
+      let profileData: any = {};
+      let postsData: any = null;
       const postEndpoints = ['get_user_posts.php', 'get_ig_posts.php'];
       
       for (const endpoint of postEndpoints) {
@@ -313,34 +297,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           );
 
+          console.log(`Trying posts endpoint: ${endpoint}, status: ${postsResponse.status}`);
+          
           if (postsResponse.ok) {
-            const postsData = await postsResponse.json();
-            const posts = postsData.data?.items || postsData.items || postsData.data || [];
-            if (posts.length > 0) {
-              recentPosts = posts.slice(0, 12).map((post: any) => ({
-                imageUrl: post.display_url || post.thumbnail_url || post.image_url,
-                caption: post.caption?.text || post.caption || '',
-                timestamp: post.taken_at || post.timestamp,
-              }));
+            postsData = await postsResponse.json();
+            console.log('Raw posts API response (first 2000 chars):', JSON.stringify(postsData, null, 2).substring(0, 2000));
+            
+            // Extract profile data from posts response - it's often in the user field
+            if (postsData.user || postsData.data?.user) {
+              profileData = postsData.user || postsData.data.user;
+              console.log(`Found profile data in ${endpoint} response`);
+              break;
+            } else if (postsData.data || postsData.items) {
+              // Try to extract from the response even if user field not found
+              console.log(`Got posts data from ${endpoint}`);
               break;
             }
           }
         } catch (error) {
-          console.log(`Failed to fetch from ${endpoint}, trying next...`);
+          console.log(`Failed to fetch from ${endpoint}:`, error);
+        }
+      }
+
+      // Extract profile info - handle various possible data structures
+      const fullName = profileData.full_name || profileData.fullName || '';
+      const bio = profileData.biography || profileData.bio || '';
+      const profilePicUrl = profileData.profile_pic_url || profileData.profile_pic_url_hd || 
+                           profileData.profilePicUrl || profileData.hd_profile_pic_url_info?.url || '';
+      const followersCount = profileData.follower_count || profileData.edge_followed_by?.count || 0;
+      const followingCount = profileData.following_count || profileData.edge_follow?.count || 0;
+      const postsCount = profileData.media_count || profileData.edge_owner_to_timeline_media?.count || 0;
+
+      // Extract posts for preview from the already-fetched posts data
+      let recentPosts: Array<{imageUrl: string; caption: string; timestamp: any}> = [];
+      if (postsData) {
+        const posts = postsData.data?.items || postsData.items || postsData.data || [];
+        if (Array.isArray(posts) && posts.length > 0) {
+          recentPosts = posts.slice(0, 12).map((post: any) => ({
+            imageUrl: post.display_url || post.thumbnail_url || post.image_url || post.url || post.image_versions2?.candidates?.[0]?.url,
+            caption: post.caption?.text || post.caption || '',
+            timestamp: post.taken_at || post.timestamp,
+          }));
         }
       }
 
       // Return preview data
-      res.json({
+      const responseData = {
         username,
-        fullName: profileData.data?.full_name || profileData.full_name,
-        bio: profileData.data?.biography || profileData.biography,
-        profilePicUrl: profileData.data?.profile_pic_url || profileData.profile_pic_url,
-        followersCount: profileData.data?.follower_count || profileData.follower_count,
-        followingCount: profileData.data?.following_count || profileData.following_count,
-        postsCount: profileData.data?.media_count || profileData.media_count,
+        fullName,
+        bio,
+        profilePicUrl,
+        followersCount,
+        followingCount,
+        postsCount,
         recentPosts,
-      });
+      };
+      console.log('Sending profile data:', JSON.stringify(responseData, null, 2));
+      res.json(responseData);
     } catch (error) {
       console.error('Profile search error:', error);
       res.status(500).json({ 
