@@ -49,7 +49,7 @@ export default function App() {
                   <SidebarTrigger data-testid="button-sidebar-toggle" />
                   <ThemeToggle />
                 </header>
-                <main className="flex-1 overflow-y-auto">
+                <main className="flex-1 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
                   <Router />
                 </main>
               </div>
