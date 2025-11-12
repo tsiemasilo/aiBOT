@@ -14,13 +14,6 @@ import {
 } from "@/components/ui/popover";
 import { format } from "date-fns";
 import { Calendar as CalendarIcon, Upload, X, Smartphone, Loader2 } from "lucide-react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 
@@ -195,21 +188,13 @@ export default function Create() {
 
                   <div className="space-y-2">
                     <Label htmlFor="time">Time</Label>
-                    <Select value={time} onValueChange={setTime}>
-                      <SelectTrigger data-testid="select-time">
-                        <SelectValue placeholder="Select time" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Array.from({ length: 24 }, (_, i) => {
-                          const hour = i.toString().padStart(2, "0");
-                          return (
-                            <SelectItem key={hour} value={`${hour}:00`}>
-                              {hour}:00
-                            </SelectItem>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
+                    <Input
+                      id="time"
+                      type="time"
+                      value={time}
+                      onChange={(e) => setTime(e.target.value)}
+                      data-testid="input-time"
+                    />
                   </div>
                 </div>
 

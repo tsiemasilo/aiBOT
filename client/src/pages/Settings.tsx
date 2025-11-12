@@ -59,8 +59,8 @@ export default function Settings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/accounts"] });
       toast({
-        title: "Account Connected",
-        description: "Your Instagram account has been connected successfully.",
+        title: "Account Added",
+        description: "Instagram username saved for demo purposes (not connected to live account).",
       });
       setDialogOpen(false);
       setUsername("");
@@ -82,8 +82,8 @@ export default function Settings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/accounts"] });
       toast({
-        title: "Account Disconnected",
-        description: "Your Instagram account has been disconnected.",
+        title: "Account Removed",
+        description: "Instagram username removed from demo list.",
       });
     },
     onError: () => {
@@ -121,12 +121,13 @@ export default function Settings() {
           </p>
         </div>
 
-        <Alert>
+        <Alert variant="default">
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Instagram Account Required</AlertTitle>
+          <AlertTitle>Demo Mode - No Live Instagram Connection</AlertTitle>
           <AlertDescription>
-            Connect your Instagram account to enable automated posting. For now, this stores your account information. 
-            In a production environment, this would use Instagram's official API with OAuth authentication.
+            This is a demonstration feature that stores your Instagram username locally for testing the app's interface. 
+            This does NOT connect to your actual Instagram account or post to Instagram. 
+            In a production environment, this would require Instagram's official API with OAuth authentication to enable real posting.
           </AlertDescription>
         </Alert>
 
@@ -148,9 +149,9 @@ export default function Settings() {
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>Connect Instagram Account</DialogTitle>
+                    <DialogTitle>Add Instagram Account (Demo Only)</DialogTitle>
                     <DialogDescription>
-                      Enter your Instagram username to connect your account
+                      Enter your Instagram username for demo purposes. This will NOT connect to your live Instagram account.
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4 py-4">
