@@ -150,23 +150,33 @@ export async function publishToInstagram(
   caption: string,
   accessToken: string
 ): Promise<{ mediaId: string }> {
-  const containerUrl = `${GRAPH_API_BASE}/${accountId}/media`;
+  if (imageUrl.startsWith('data:')) {
+    throw new Error('Base64 images are not supported. Images must be publicly accessible HTTPS URLs.');
+  }
   
-  const containerResponse = await fetch(containerUrl, {
+  if (!imageUrl.startsWith('https://')) {
+    throw new Error('Image URL must be a publicly accessible HTTPS URL (HTTP is not supported by Instagram)');
+  }
+
+  const containerUrl = new URL(`${GRAPH_API_BASE}/${accountId}/media`);
+  containerUrl.searchParams.append('image_url', imageUrl);
+  containerUrl.searchParams.append('caption', caption);
+  containerUrl.searchParams.append('access_token', accessToken);
+  
+  const containerResponse = await fetch(containerUrl.toString(), {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      image_url: imageUrl,
-      caption: caption,
-      access_token: accessToken,
-    }),
   });
 
   if (!containerResponse.ok) {
-    const error = await containerResponse.json();
-    throw new Error(error.error?.message || "Failed to create media container");
+    const errorText = await containerResponse.text();
+    let errorMessage = 'Failed to create media container';
+    try {
+      const error = JSON.parse(errorText);
+      errorMessage = error.error?.message || errorMessage;
+    } catch {
+      errorMessage = errorText || errorMessage;
+    }
+    throw new Error(errorMessage);
   }
 
   const containerData: MediaContainerResponse = await containerResponse.json();
@@ -174,22 +184,24 @@ export async function publishToInstagram(
 
   await new Promise(resolve => setTimeout(resolve, 2000));
 
-  const publishUrl = `${GRAPH_API_BASE}/${accountId}/media_publish`;
+  const publishUrl = new URL(`${GRAPH_API_BASE}/${accountId}/media_publish`);
+  publishUrl.searchParams.append('creation_id', creationId);
+  publishUrl.searchParams.append('access_token', accessToken);
   
-  const publishResponse = await fetch(publishUrl, {
+  const publishResponse = await fetch(publishUrl.toString(), {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      creation_id: creationId,
-      access_token: accessToken,
-    }),
   });
 
   if (!publishResponse.ok) {
-    const error = await publishResponse.json();
-    throw new Error(error.error?.message || "Failed to publish media");
+    const errorText = await publishResponse.text();
+    let errorMessage = 'Failed to publish media';
+    try {
+      const error = JSON.parse(errorText);
+      errorMessage = error.error?.message || errorMessage;
+    } catch {
+      errorMessage = errorText || errorMessage;
+    }
+    throw new Error(errorMessage);
   }
 
   const publishData: PublishResponse = await publishResponse.json();
