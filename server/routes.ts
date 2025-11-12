@@ -4,6 +4,15 @@ import { storage } from "./storage";
 import { insertPostSchema, insertScheduleSettingsSchema, insertAutomationSettingsSchema, insertConnectedAccountSchema } from "@shared/schema";
 import { paraphraseCaption } from "./openai";
 import { fetchInstagramProfile, fetchInstagramPosts } from "./instagram-scrapers";
+import { 
+  buildAuthUrl, 
+  exchangeCodeForToken, 
+  getLongLivedToken, 
+  getInstagramBusinessAccountId, 
+  publishToInstagram,
+  refreshAccessToken 
+} from "./instagram-graph-api";
+import { randomBytes } from "crypto";
 
 // Helper function to analyze Instagram content
 function analyzeInstagramContent(username: string, profileData: any, posts: any[]) {
@@ -447,6 +456,127 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete account" });
+    }
+  });
+
+  // Instagram OAuth Routes
+  app.get("/auth/instagram", async (req, res) => {
+    try {
+      const state = randomBytes(16).toString('hex');
+      const authUrl = buildAuthUrl(state);
+      res.redirect(authUrl);
+    } catch (error) {
+      console.error('Instagram auth redirect error:', error);
+      res.redirect('/settings?error=auth_failed');
+    }
+  });
+
+  app.get("/auth/instagram/callback", async (req, res) => {
+    try {
+      const { code, error, error_description } = req.query;
+
+      if (error) {
+        console.error('Instagram OAuth error:', error, error_description);
+        return res.redirect('/settings?error=auth_denied');
+      }
+
+      if (!code || typeof code !== 'string') {
+        return res.redirect('/settings?error=no_code');
+      }
+
+      const tokenResponse = await exchangeCodeForToken(code);
+      const longLivedTokenResponse = await getLongLivedToken(tokenResponse.access_token);
+      
+      const { accountId, username, profilePictureUrl } = await getInstagramBusinessAccountId(longLivedTokenResponse.access_token);
+
+      const tokenExpiresAt = new Date();
+      tokenExpiresAt.setDate(tokenExpiresAt.getDate() + 60);
+
+      await storage.createConnectedAccount({
+        platform: "instagram",
+        username,
+        accessToken: longLivedTokenResponse.access_token,
+        instagramBusinessAccountId: accountId,
+        tokenExpiresAt,
+        profileImageUrl: profilePictureUrl || null,
+        profileUrl: `https://instagram.com/${username}`,
+        isActive: true,
+        metadata: {
+          tokenType: longLivedTokenResponse.token_type,
+          expiresIn: longLivedTokenResponse.expires_in || 5184000,
+        },
+      });
+
+      res.redirect('/settings?connected=true');
+    } catch (error) {
+      console.error('Instagram callback error:', error);
+      res.redirect(`/settings?error=${encodeURIComponent(error instanceof Error ? error.message : 'connection_failed')}`);
+    }
+  });
+
+  app.post("/api/accounts/:id/publish", async (req, res) => {
+    try {
+      const { imageUrl, caption } = req.body;
+
+      if (!imageUrl || !caption) {
+        return res.status(400).json({ error: "Image URL and caption are required" });
+      }
+
+      const account = await storage.getConnectedAccount(req.params.id);
+      
+      if (!account) {
+        return res.status(404).json({ error: "Account not found" });
+      }
+
+      if (!account.accessToken || !account.instagramBusinessAccountId) {
+        return res.status(400).json({ error: "Account is not properly connected. Please reconnect your Instagram account." });
+      }
+
+      let accessToken = account.accessToken;
+
+      if (account.tokenExpiresAt && new Date(account.tokenExpiresAt) < new Date()) {
+        console.log('Access token expired, refreshing...');
+        try {
+          const refreshedToken = await refreshAccessToken(accessToken);
+          accessToken = refreshedToken.access_token;
+
+          const newExpiresAt = new Date();
+          newExpiresAt.setDate(newExpiresAt.getDate() + 60);
+
+          await storage.updateConnectedAccount(req.params.id, {
+            accessToken,
+            tokenExpiresAt: newExpiresAt,
+          });
+        } catch (refreshError) {
+          console.error('Token refresh failed:', refreshError);
+          return res.status(401).json({ 
+            error: "Access token expired and refresh failed. Please reconnect your Instagram account.",
+            reconnectRequired: true 
+          });
+        }
+      }
+
+      const result = await publishToInstagram(
+        account.instagramBusinessAccountId,
+        imageUrl,
+        caption,
+        accessToken
+      );
+
+      await storage.updateConnectedAccount(req.params.id, {
+        lastSyncedAt: new Date(),
+      });
+
+      res.json({
+        success: true,
+        mediaId: result.mediaId,
+        message: "Successfully published to Instagram",
+      });
+    } catch (error) {
+      console.error('Instagram publish error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : "Failed to publish to Instagram" 
+      });
     }
   });
 

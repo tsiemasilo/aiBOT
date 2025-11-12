@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,10 +12,25 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { 
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert";
 import { format } from "date-fns";
-import { Calendar as CalendarIcon, Upload, X, Smartphone, Loader2 } from "lucide-react";
+import { Calendar as CalendarIcon, Upload, X, Smartphone, Loader2, Send, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+
+interface ConnectedAccount {
+  id: string;
+  platform: string;
+  username: string;
+  accessToken?: string | null;
+  instagramBusinessAccountId?: string | null;
+  tokenExpiresAt?: Date | null;
+  isActive: boolean;
+}
 
 export default function Create() {
   const { toast } = useToast();
@@ -24,6 +39,17 @@ export default function Create() {
   const [time, setTime] = useState("09:00");
   const [caption, setCaption] = useState("");
   const [imagePreview, setImagePreview] = useState<string>();
+
+  const { data: accounts = [] } = useQuery<ConnectedAccount[]>({
+    queryKey: ["/api/accounts"],
+  });
+
+  const activeAccount = accounts.find(acc => 
+    acc.isActive && 
+    acc.instagramBusinessAccountId && 
+    acc.tokenExpiresAt && 
+    new Date(acc.tokenExpiresAt) > new Date()
+  );
 
   const createPostMutation = useMutation({
     mutationFn: async (postData: { imageUrl: string; caption: string; scheduledDate: string; status: string }) => {
@@ -51,6 +77,46 @@ export default function Create() {
     },
   });
 
+  const publishNowMutation = useMutation({
+    mutationFn: async (publishData: { imageUrl: string; caption: string }) => {
+      if (!activeAccount) {
+        throw new Error("No active Instagram account found");
+      }
+      
+      const response = await apiRequest("POST", `/api/accounts/${activeAccount.id}/publish`, publishData);
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Published to Instagram!",
+        description: "Your post has been successfully published to Instagram.",
+      });
+      setDate(undefined);
+      setTime("09:00");
+      setCaption("");
+      setImagePreview(undefined);
+      setLocation("/");
+    },
+    onError: (error: any) => {
+      const errorMessage = error instanceof Error ? error.message : "Failed to publish to Instagram";
+      
+      if (error.reconnectRequired) {
+        toast({
+          title: "Reconnection Required",
+          description: "Your Instagram access has expired. Please reconnect your account in Settings.",
+          variant: "destructive",
+        });
+        setTimeout(() => setLocation("/settings"), 2000);
+      } else {
+        toast({
+          title: "Publishing Failed",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
+    },
+  });
+
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -65,6 +131,16 @@ export default function Create() {
   const handleSchedule = () => {
     if (!date || !imagePreview) return;
 
+    if (!activeAccount) {
+      toast({
+        title: "No Instagram Account",
+        description: "Please connect your Instagram account in Settings before scheduling posts.",
+        variant: "destructive",
+      });
+      setTimeout(() => setLocation("/settings"), 2000);
+      return;
+    }
+
     const [hours, minutes] = time.split(":");
     const scheduledDate = new Date(date);
     scheduledDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
@@ -77,15 +153,51 @@ export default function Create() {
     });
   };
 
+  const handlePostNow = () => {
+    if (!imagePreview) return;
+
+    if (!activeAccount) {
+      toast({
+        title: "No Instagram Account",
+        description: "Please connect your Instagram account in Settings before posting.",
+        variant: "destructive",
+      });
+      setTimeout(() => setLocation("/settings"), 2000);
+      return;
+    }
+
+    publishNowMutation.mutate({
+      imageUrl: imagePreview,
+      caption,
+    });
+  };
+
   return (
     <div className="p-6">
       <div className="max-w-5xl mx-auto space-y-6">
         <div>
           <h1 className="text-3xl font-semibold">Create Post</h1>
           <p className="text-muted-foreground mt-1">
-            Upload an image and schedule your Instagram post
+            Upload an image and post to Instagram or schedule for later
           </p>
         </div>
+
+        {!activeAccount && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Instagram Account Not Connected</AlertTitle>
+            <AlertDescription>
+              You need to connect your Instagram Business account before you can post. 
+              <Button 
+                variant="link" 
+                className="p-0 h-auto ml-1 text-destructive underline"
+                onClick={() => setLocation("/settings")}
+              >
+                Connect in Settings
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="space-y-6">
@@ -198,21 +310,46 @@ export default function Create() {
                   </div>
                 </div>
 
-                <Button 
-                  className="w-full" 
-                  onClick={handleSchedule}
-                  disabled={!imagePreview || !date || createPostMutation.isPending}
-                  data-testid="button-schedule-post"
-                >
-                  {createPostMutation.isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Scheduling...
-                    </>
-                  ) : (
-                    "Schedule Post"
-                  )}
-                </Button>
+                <div className="space-y-2">
+                  <Button 
+                    className="w-full" 
+                    onClick={handleSchedule}
+                    disabled={!imagePreview || !date || createPostMutation.isPending || publishNowMutation.isPending}
+                    data-testid="button-schedule-post"
+                  >
+                    {createPostMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Scheduling...
+                      </>
+                    ) : (
+                      <>
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        Schedule Post
+                      </>
+                    )}
+                  </Button>
+                  
+                  <Button 
+                    variant="default"
+                    className="w-full" 
+                    onClick={handlePostNow}
+                    disabled={!imagePreview || publishNowMutation.isPending || createPostMutation.isPending}
+                    data-testid="button-post-now"
+                  >
+                    {publishNowMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Publishing...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="mr-2 h-4 w-4" />
+                        Post Now to Instagram
+                      </>
+                    )}
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -230,7 +367,9 @@ export default function Create() {
                 <div className="border rounded-lg overflow-hidden bg-background">
                   <div className="p-3 border-b flex items-center gap-2">
                     <div className="h-8 w-8 rounded-full bg-gradient-to-br from-purple-400 to-orange-400" />
-                    <span className="font-semibold text-sm">your_username</span>
+                    <span className="font-semibold text-sm">
+                      {activeAccount?.username || "your_username"}
+                    </span>
                   </div>
                   <div className="aspect-square bg-gradient-to-br from-purple-400 to-orange-400">
                     {imagePreview && (
@@ -248,7 +387,9 @@ export default function Create() {
                       <div className="h-6 w-6 rounded-full border-2 border-foreground" />
                     </div>
                     <p className="text-sm">
-                      <span className="font-semibold">your_username</span>{" "}
+                      <span className="font-semibold">
+                        {activeAccount?.username || "your_username"}
+                      </span>{" "}
                       {caption || "Your caption will appear here..."}
                     </p>
                   </div>

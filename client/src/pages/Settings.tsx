@@ -1,34 +1,28 @@
-import { useState } from "react";
+import { useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Instagram, Plus, Trash2, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { Instagram, Plus, Trash2, CheckCircle2, AlertCircle, RefreshCw, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { EmptyState } from "@/components/EmptyState";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import {
   Alert,
   AlertDescription,
   AlertTitle,
 } from "@/components/ui/alert";
+import { formatDistanceToNow } from "date-fns";
 
 interface ConnectedAccount {
   id: string;
   platform: string;
   username: string;
+  accessToken?: string | null;
+  instagramBusinessAccountId?: string | null;
+  tokenExpiresAt?: Date | null;
+  metadata?: any;
   profileUrl?: string | null;
   profileImageUrl?: string | null;
   isActive: boolean;
@@ -37,43 +31,32 @@ interface ConnectedAccount {
 }
 
 export default function Settings() {
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [username, setUsername] = useState("");
-  const [profileUrl, setProfileUrl] = useState("");
   const { toast } = useToast();
 
   const { data: accounts = [], isLoading } = useQuery<ConnectedAccount[]>({
     queryKey: ["/api/accounts"],
   });
 
-  const connectMutation = useMutation({
-    mutationFn: async (accountData: { username: string; profileUrl?: string }) => {
-      const response = await apiRequest("POST", "/api/accounts", {
-        platform: "instagram",
-        username: accountData.username,
-        profileUrl: accountData.profileUrl || `https://instagram.com/${accountData.username}`,
-        isActive: true,
-      });
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/accounts"] });
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const connected = params.get('connected');
+    const error = params.get('error');
+
+    if (connected === 'true') {
       toast({
-        title: "Account Added",
-        description: "Instagram username saved for demo purposes (not connected to live account).",
+        title: "Instagram Connected",
+        description: "Your Instagram Business account has been successfully connected!",
       });
-      setDialogOpen(false);
-      setUsername("");
-      setProfileUrl("");
-    },
-    onError: (error) => {
+      window.history.replaceState({}, '', '/settings');
+    } else if (error) {
       toast({
         title: "Connection Failed",
-        description: error instanceof Error ? error.message : "Failed to connect account. Please try again.",
+        description: decodeURIComponent(error),
         variant: "destructive",
       });
-    },
-  });
+      window.history.replaceState({}, '', '/settings');
+    }
+  }, [toast]);
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -82,8 +65,8 @@ export default function Settings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/accounts"] });
       toast({
-        title: "Account Removed",
-        description: "Instagram username removed from demo list.",
+        title: "Account Disconnected",
+        description: "Your Instagram account has been disconnected.",
       });
     },
     onError: () => {
@@ -96,19 +79,31 @@ export default function Settings() {
   });
 
   const handleConnect = () => {
-    if (!username.trim()) {
-      toast({
-        title: "Username Required",
-        description: "Please enter your Instagram username.",
-        variant: "destructive",
-      });
-      return;
-    }
+    window.location.href = '/auth/instagram';
+  };
 
-    connectMutation.mutate({ 
-      username: username.trim(),
-      profileUrl: profileUrl.trim() || undefined,
-    });
+  const handleReconnect = () => {
+    window.location.href = '/auth/instagram';
+  };
+
+  const isTokenExpired = (account: ConnectedAccount) => {
+    if (!account.tokenExpiresAt) return false;
+    return new Date(account.tokenExpiresAt) < new Date();
+  };
+
+  const getTokenExpiryInfo = (account: ConnectedAccount) => {
+    if (!account.tokenExpiresAt) return null;
+    const expiresAt = new Date(account.tokenExpiresAt);
+    const now = new Date();
+    
+    if (expiresAt < now) {
+      return { expired: true, text: "Token expired" };
+    }
+    
+    return { 
+      expired: false, 
+      text: `Expires ${formatDistanceToNow(expiresAt, { addSuffix: true })}` 
+    };
   };
 
   return (
@@ -117,17 +112,16 @@ export default function Settings() {
         <div>
           <h1 className="text-3xl font-semibold">Settings</h1>
           <p className="text-muted-foreground mt-1">
-            Manage your connected accounts and automation settings
+            Manage your connected Instagram Business accounts
           </p>
         </div>
 
         <Alert variant="default">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Demo Mode - No Live Instagram Connection</AlertTitle>
+          <Info className="h-4 w-4" />
+          <AlertTitle>Instagram Business Account Required</AlertTitle>
           <AlertDescription>
-            This is a demonstration feature that stores your Instagram username locally for testing the app's interface. 
-            This does NOT connect to your actual Instagram account or post to Instagram. 
-            In a production environment, this would require Instagram's official API with OAuth authentication to enable real posting.
+            To use this app, you need an Instagram Business Account connected to a Facebook Page. 
+            Make sure you have converted your Instagram account to a Business account and linked it to a Facebook Page before connecting.
           </AlertDescription>
         </Alert>
 
@@ -137,63 +131,16 @@ export default function Settings() {
               <div>
                 <CardTitle>Connected Accounts</CardTitle>
                 <CardDescription>
-                  Manage your social media accounts for automation
+                  Manage your Instagram Business accounts for posting
                 </CardDescription>
               </div>
-              <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button data-testid="button-connect-account">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Connect Account
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Add Instagram Account (Demo Only)</DialogTitle>
-                    <DialogDescription>
-                      Enter your Instagram username for demo purposes. This will NOT connect to your live Instagram account.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="username">Instagram Username</Label>
-                      <Input
-                        id="username"
-                        placeholder="your_username"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                        data-testid="input-username"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="profileUrl">Profile URL (Optional)</Label>
-                      <Input
-                        id="profileUrl"
-                        placeholder="https://instagram.com/your_username"
-                        value={profileUrl}
-                        onChange={(e) => setProfileUrl(e.target.value)}
-                        data-testid="input-profile-url"
-                      />
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button
-                      onClick={handleConnect}
-                      disabled={connectMutation.isPending}
-                      data-testid="button-confirm-connect"
-                    >
-                      {connectMutation.isPending ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Connecting...
-                        </>
-                      ) : (
-                        "Connect Account"
-                      )}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+              <Button 
+                onClick={handleConnect}
+                data-testid="button-connect-instagram"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Connect Instagram
+              </Button>
             </div>
           </CardHeader>
           <CardContent>
@@ -203,55 +150,95 @@ export default function Settings() {
               </div>
             ) : accounts.length > 0 ? (
               <div className="space-y-4">
-                {accounts.map((account) => (
-                  <div
-                    key={account.id}
-                    className="flex items-center justify-between p-4 border rounded-lg hover-elevate"
-                  >
-                    <div className="flex items-center gap-4">
-                      <Avatar className="h-12 w-12">
-                        <AvatarImage src={account.profileImageUrl || undefined} />
-                        <AvatarFallback className="bg-gradient-to-br from-purple-400 to-orange-400 text-white">
-                          <Instagram className="h-6 w-6" />
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-semibold">{account.username}</h3>
-                          {account.isActive ? (
-                            <Badge variant="default" className="gap-1">
-                              <CheckCircle2 className="h-3 w-3" />
-                              Active
-                            </Badge>
-                          ) : (
-                            <Badge variant="secondary">Inactive</Badge>
-                          )}
+                {accounts.map((account) => {
+                  const tokenInfo = getTokenExpiryInfo(account);
+                  const expired = isTokenExpired(account);
+                  
+                  return (
+                    <div
+                      key={account.id}
+                      className="flex items-center justify-between p-4 border rounded-lg hover-elevate"
+                    >
+                      <div className="flex items-center gap-4 flex-1">
+                        <Avatar className="h-12 w-12">
+                          <AvatarImage src={account.profileImageUrl || undefined} />
+                          <AvatarFallback className="bg-gradient-to-br from-purple-400 to-orange-400 text-white">
+                            <Instagram className="h-6 w-6" />
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-semibold">{account.username}</h3>
+                            {expired ? (
+                              <Badge variant="destructive" className="gap-1">
+                                <AlertCircle className="h-3 w-3" />
+                                Expired
+                              </Badge>
+                            ) : account.isActive ? (
+                              <Badge variant="default" className="gap-1">
+                                <CheckCircle2 className="h-3 w-3" />
+                                Active
+                              </Badge>
+                            ) : (
+                              <Badge variant="secondary">Inactive</Badge>
+                            )}
+                          </div>
+                          <div className="space-y-1 mt-1">
+                            <p className="text-sm text-muted-foreground">
+                              Connected {new Date(account.connectedAt).toLocaleDateString()}
+                            </p>
+                            {account.instagramBusinessAccountId && (
+                              <p className="text-xs text-muted-foreground">
+                                Business ID: {account.instagramBusinessAccountId}
+                              </p>
+                            )}
+                            {tokenInfo && (
+                              <p className={`text-xs ${expired ? 'text-destructive' : 'text-muted-foreground'}`}>
+                                {tokenInfo.text}
+                              </p>
+                            )}
+                            {account.lastSyncedAt && (
+                              <p className="text-xs text-muted-foreground">
+                                Last synced {formatDistanceToNow(new Date(account.lastSyncedAt), { addSuffix: true })}
+                              </p>
+                            )}
+                          </div>
                         </div>
-                        <p className="text-sm text-muted-foreground">
-                          Connected {new Date(account.connectedAt).toLocaleDateString()}
-                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        {expired && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleReconnect}
+                            data-testid="button-reconnect-account"
+                          >
+                            <RefreshCw className="h-4 w-4 mr-2" />
+                            Reconnect
+                          </Button>
+                        )}
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => deleteMutation.mutate(account.id)}
+                          disabled={deleteMutation.isPending}
+                          data-testid="button-disconnect-account"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Disconnect
+                        </Button>
                       </div>
                     </div>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => deleteMutation.mutate(account.id)}
-                      disabled={deleteMutation.isPending}
-                      data-testid="button-disconnect-account"
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Disconnect
-                    </Button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <EmptyState
                 icon={Instagram}
                 title="No accounts connected"
-                description="Connect your Instagram account to start automating your posts"
+                description="Connect your Instagram Business account to start posting automatically"
                 actionLabel="Connect Instagram"
-                onAction={() => setDialogOpen(true)}
+                onAction={handleConnect}
               />
             )}
           </CardContent>
