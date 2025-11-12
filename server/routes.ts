@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertPostSchema, insertScheduleSettingsSchema, insertAutomationSettingsSchema, insertConnectedAccountSchema } from "@shared/schema";
 import { paraphraseCaption } from "./openai";
+import { fetchInstagramProfile, fetchInstagramPosts } from "./instagram-scrapers";
 
 // Helper function to analyze Instagram content
 function analyzeInstagramContent(username: string, profileData: any, posts: any[]) {
@@ -261,7 +262,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Please provide a valid Instagram URL" });
       }
 
-      // Extract username from URL
       let username = '';
       try {
         const parsedUrl = new URL(url);
@@ -280,80 +280,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(503).json({ error: "Profile search service is currently unavailable" });
       }
 
-      // Fetch posts first - posts endpoint often includes profile data in the user field
-      let profileData: any = {};
-      let postsData: any = null;
-      const postEndpoints = ['get_user_posts.php', 'get_ig_posts.php'];
-      
-      for (const endpoint of postEndpoints) {
-        try {
-          const postsResponse = await fetch(
-            `https://instagram-scraper-stable-api.p.rapidapi.com/${endpoint}?username_or_url=${username}`,
-            {
-              headers: {
-                'X-RapidAPI-Key': RAPIDAPI_KEY,
-                'X-RapidAPI-Host': 'instagram-scraper-stable-api.p.rapidapi.com'
-              }
-            }
-          );
-
-          console.log(`Trying posts endpoint: ${endpoint}, status: ${postsResponse.status}`);
-          
-          if (postsResponse.ok) {
-            postsData = await postsResponse.json();
-            console.log('Raw posts API response (first 2000 chars):', JSON.stringify(postsData, null, 2).substring(0, 2000));
-            
-            // Extract profile data from posts response - it's often in the user field
-            if (postsData.user || postsData.data?.user) {
-              profileData = postsData.user || postsData.data.user;
-              console.log(`Found profile data in ${endpoint} response`);
-              break;
-            } else if (postsData.data || postsData.items) {
-              // Try to extract from the response even if user field not found
-              console.log(`Got posts data from ${endpoint}`);
-              break;
-            }
-          }
-        } catch (error) {
-          console.log(`Failed to fetch from ${endpoint}:`, error);
-        }
-      }
-
-      // Extract profile info - handle various possible data structures
-      const fullName = profileData.full_name || profileData.fullName || '';
-      const bio = profileData.biography || profileData.bio || '';
-      const profilePicUrl = profileData.profile_pic_url || profileData.profile_pic_url_hd || 
-                           profileData.profilePicUrl || profileData.hd_profile_pic_url_info?.url || '';
-      const followersCount = profileData.follower_count || profileData.edge_followed_by?.count || 0;
-      const followingCount = profileData.following_count || profileData.edge_follow?.count || 0;
-      const postsCount = profileData.media_count || profileData.edge_owner_to_timeline_media?.count || 0;
-
-      // Extract posts for preview from the already-fetched posts data
-      let recentPosts: Array<{imageUrl: string; caption: string; timestamp: any}> = [];
-      if (postsData) {
-        const posts = postsData.data?.items || postsData.items || postsData.data || [];
-        if (Array.isArray(posts) && posts.length > 0) {
-          recentPosts = posts.slice(0, 12).map((post: any) => ({
-            imageUrl: post.display_url || post.thumbnail_url || post.image_url || post.url || post.image_versions2?.candidates?.[0]?.url,
-            caption: post.caption?.text || post.caption || '',
-            timestamp: post.taken_at || post.timestamp,
-          }));
-        }
-      }
-
-      // Return preview data
-      const responseData = {
-        username,
-        fullName,
-        bio,
-        profilePicUrl,
-        followersCount,
-        followingCount,
-        postsCount,
-        recentPosts,
-      };
-      console.log('Sending profile data:', JSON.stringify(responseData, null, 2));
-      res.json(responseData);
+      const profileData = await fetchInstagramProfile(username, RAPIDAPI_KEY);
+      console.log('Profile data retrieved:', JSON.stringify(profileData, null, 2).substring(0, 1000));
+      res.json(profileData);
     } catch (error) {
       console.error('Profile search error:', error);
       res.status(500).json({ 
@@ -375,37 +304,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(503).json({ error: "Service is currently unavailable" });
       }
 
-      // Fetch all posts from the profile for automation to use
-      let allPosts = [];
-      const username = profileData.username;
-      const postEndpoints = ['get_user_posts.php', 'get_ig_posts.php'];
-      
-      for (const endpoint of postEndpoints) {
-        try {
-          const postsResponse = await fetch(
-            `https://instagram-scraper-stable-api.p.rapidapi.com/${endpoint}?username_or_url=${username}`,
-            {
-              headers: {
-                'X-RapidAPI-Key': RAPIDAPI_KEY,
-                'X-RapidAPI-Host': 'instagram-scraper-stable-api.p.rapidapi.com'
-              }
-            }
-          );
+      const allPosts = await fetchInstagramPosts(profileData.username, RAPIDAPI_KEY);
+      console.log(`Fetched ${allPosts.length} posts for automation`);
 
-          if (postsResponse.ok) {
-            const postsData = await postsResponse.json();
-            const posts = postsData.data?.items || postsData.items || postsData.data || [];
-            if (posts.length > 0) {
-              allPosts = posts;
-              break;
-            }
-          }
-        } catch (error) {
-          console.log(`Failed to fetch posts from ${endpoint}`);
-        }
-      }
-
-      // Save confirmed profile and posts to automation settings
       await storage.saveAutomationSettings({
         sourceProfileUrl: url,
         sourceProfileData: profileData,
@@ -436,14 +337,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Please provide a valid Instagram URL" });
       }
 
-      // Extract username from URL, handling query parameters and trailing slashes
       let username = '';
       try {
         const parsedUrl = new URL(url);
         const pathParts = parsedUrl.pathname.split('/').filter(Boolean);
         username = pathParts[0]?.replace('@', '') || '';
       } catch {
-        // Fallback to simple split if URL parsing fails
         username = url.split('/').filter(Boolean).pop()?.split('?')[0]?.replace('@', '') || '';
       }
       
@@ -456,69 +355,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(503).json({ error: "Profile analysis service is currently unavailable" });
       }
 
-      // Fetch user profile data using correct endpoint format
-      const profileResponse = await fetch(
-        `https://instagram-scraper-stable-api.p.rapidapi.com/get_ig_user_about.php?username_or_url=${username}`,
-        {
-          headers: {
-            'X-RapidAPI-Key': RAPIDAPI_KEY,
-            'X-RapidAPI-Host': 'instagram-scraper-stable-api.p.rapidapi.com'
-          }
-        }
-      );
-
-      if (!profileResponse.ok) {
-        const errorText = await profileResponse.text();
-        console.error('Profile fetch error:', profileResponse.status, errorText);
-        throw new Error(`Failed to fetch profile: ${profileResponse.status}`);
-      }
-
-      const profileData = await profileResponse.json();
-      console.log('Profile data received:', JSON.stringify(profileData).substring(0, 300));
-
-      // Try to fetch user posts/media - trying multiple endpoint patterns
-      let posts = [];
-      const postEndpoints = [
-        'get_user_posts.php',
-        'get_ig_posts.php',
-        'user_posts.php',
-        'ig_user_posts.php'
-      ];
-
-      for (const endpoint of postEndpoints) {
-        try {
-          const postsResponse = await fetch(
-            `https://instagram-scraper-stable-api.p.rapidapi.com/${endpoint}?username_or_url=${username}`,
-            {
-              headers: {
-                'X-RapidAPI-Key': RAPIDAPI_KEY,
-                'X-RapidAPI-Host': 'instagram-scraper-stable-api.p.rapidapi.com'
-              }
-            }
-          );
-
-          if (postsResponse.ok) {
-            const postsData = await postsResponse.json();
-            console.log(`Posts fetched from ${endpoint}:`, JSON.stringify(postsData).substring(0, 300));
-            posts = postsData.data?.items || postsData.items || postsData.data || [];
-            if (posts.length > 0) break;
-          }
-        } catch (error) {
-          console.log(`Endpoint ${endpoint} failed, trying next...`);
-        }
-      }
-
+      const profileData = await fetchInstagramProfile(username, RAPIDAPI_KEY);
+      const posts = await fetchInstagramPosts(username, RAPIDAPI_KEY);
+      
       if (posts.length === 0) {
-        console.log('Could not fetch posts from any endpoint. Analysis will be limited to profile data.');
+        console.log('Could not fetch posts. Analysis will be limited to profile data.');
       }
 
-      // Analyze content
       const analyzedData = analyzeInstagramContent(username, profileData, posts);
 
-      // Save analyzed data to automation settings (for backward compatibility with old analyzer)
       await storage.saveAutomationSettings({
         sourceProfileUrl: url,
-        sourceProfileData: { username, ...profileData },
+        sourceProfileData: profileData,
         sourceProfilePosts: posts,
         lastAnalyzedAt: new Date(),
       });
