@@ -52,7 +52,7 @@ const scrapers: ScraperConfig[] = [
     name: "Instagram Scraper Stable API",
     host: "instagram-scraper-stable-api.p.rapidapi.com",
     endpoints: {
-      posts: "get_user_posts.php"
+      posts: "/get_user_posts.php"
     },
     extractProfile: (data: any, username: string) => {
       const user = data?.user || data?.data?.user || {};
