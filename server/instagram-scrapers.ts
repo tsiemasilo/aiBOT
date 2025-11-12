@@ -56,7 +56,7 @@ const scrapers: ScraperConfig[] = [
       posts: "/get_ig_user_reels.php"
     },
     extractProfile: (data: any, username: string) => {
-      const user = data?.user || data?.data?.user || data?.data || data;
+      const user = data?.user_data || data?.user || data?.data?.user || data?.data || data;
       return {
         username: user.username || username,
         fullName: user.full_name || user.fullName || user.name || "",
@@ -64,11 +64,12 @@ const scrapers: ScraperConfig[] = [
         profilePicUrl: user.profile_pic_url || user.profile_pic_url_hd || user.hd_profile_pic_url_info?.url || user.profile_picture || user.profile_pic || "",
         followersCount: user.follower_count || user.edge_followed_by?.count || user.followers || user.followers_count || 0,
         followingCount: user.following_count || user.edge_follow?.count || user.following || user.following_count || 0,
-        postsCount: user.media_count || user.edge_owner_to_timeline_media?.count || user.posts_count || user.posts || user.media_count || 0,
+        postsCount: user.media_count || user.edge_owner_to_timeline_media?.count || user.posts_count || user.posts || 0,
       };
     },
     extractPosts: (data: any) => {
-      return data?.data?.items || data?.items || data?.data || data?.reels || data?.medias || [];
+      const items = data?.medias || data?.reels || data?.data?.items || data?.items || data?.data || [];
+      return Array.isArray(items) ? items : [];
     }
   },
   {
