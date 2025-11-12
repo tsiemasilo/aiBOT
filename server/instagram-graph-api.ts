@@ -35,7 +35,11 @@ function getRedirectUri(): string {
     return `https://${replSlug}.${replOwner}.repl.co/auth/instagram/callback`;
   }
   
-  return `${process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000'}/auth/instagram/callback`;
+  if (process.env.REPLIT_DEV_DOMAIN) {
+    return `https://${process.env.REPLIT_DEV_DOMAIN}/auth/instagram/callback`;
+  }
+  
+  return 'http://localhost:5000/auth/instagram/callback';
 }
 
 export async function exchangeCodeForToken(code: string): Promise<TokenResponse> {
