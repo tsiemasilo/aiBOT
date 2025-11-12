@@ -52,7 +52,7 @@ const scrapers: ScraperConfig[] = [
     name: "Instagram Scraper Stable API",
     host: "instagram-scraper-stable-api.p.rapidapi.com",
     endpoints: {
-      profile: "/get_ig_user_about.php",
+      profile: "/ig_get_fb_profile_hover.php",
       posts: "/get_ig_user_reels.php"
     },
     extractProfile: (data: any, username: string) => {
@@ -61,14 +61,14 @@ const scrapers: ScraperConfig[] = [
         username: user.username || username,
         fullName: user.full_name || user.fullName || user.name || "",
         bio: user.biography || user.bio || user.description || "",
-        profilePicUrl: user.profile_pic_url || user.profile_pic_url_hd || user.hd_profile_pic_url_info?.url || user.profile_picture || "",
-        followersCount: user.follower_count || user.edge_followed_by?.count || user.followers || 0,
-        followingCount: user.following_count || user.edge_follow?.count || user.following || 0,
-        postsCount: user.media_count || user.edge_owner_to_timeline_media?.count || user.posts_count || user.posts || 0,
+        profilePicUrl: user.profile_pic_url || user.profile_pic_url_hd || user.hd_profile_pic_url_info?.url || user.profile_picture || user.profile_pic || "",
+        followersCount: user.follower_count || user.edge_followed_by?.count || user.followers || user.followers_count || 0,
+        followingCount: user.following_count || user.edge_follow?.count || user.following || user.following_count || 0,
+        postsCount: user.media_count || user.edge_owner_to_timeline_media?.count || user.posts_count || user.posts || user.media_count || 0,
       };
     },
     extractPosts: (data: any) => {
-      return data?.data?.items || data?.items || data?.data || data?.reels || [];
+      return data?.data?.items || data?.items || data?.data || data?.reels || data?.medias || [];
     }
   },
   {
@@ -164,7 +164,7 @@ export async function fetchInstagramProfile(username: string, rapidApiKey: strin
           let response;
           if (isStableAPI) {
             const formData = new URLSearchParams();
-            formData.append('username_or_id_or_url', username);
+            formData.append('username', username);
             
             console.log(`[${scraper.name}] Posts URL (POST): https://${scraper.host}${scraper.endpoints.posts}`);
             response = await fetch(`https://${scraper.host}${scraper.endpoints.posts}`, {
@@ -257,7 +257,7 @@ export async function fetchInstagramPosts(username: string, rapidApiKey: string)
       let response;
       if (isStableAPI) {
         const formData = new URLSearchParams();
-        formData.append('username_or_id_or_url', username);
+        formData.append('username', username);
         
         response = await fetch(`https://${scraper.host}${scraper.endpoints.posts}`, {
           method: 'POST',
