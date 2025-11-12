@@ -459,6 +459,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Debug endpoint to check OAuth configuration
+  app.get("/api/instagram/debug", async (req, res) => {
+    try {
+      const replSlug = process.env.REPL_SLUG;
+      const replOwner = process.env.REPL_OWNER;
+      
+      let redirectUri: string;
+      if (replSlug && replOwner) {
+        redirectUri = `https://${replSlug}.${replOwner}.repl.co/auth/instagram/callback`;
+      } else if (process.env.REPLIT_DEV_DOMAIN) {
+        redirectUri = `https://${process.env.REPLIT_DEV_DOMAIN}/auth/instagram/callback`;
+      } else {
+        redirectUri = 'http://localhost:5000/auth/instagram/callback';
+      }
+      
+      const state = randomBytes(16).toString('hex');
+      const authUrl = buildAuthUrl(state);
+      
+      res.json({
+        redirectUri,
+        authUrl,
+        appId: process.env.INSTAGRAM_APP_ID,
+        appSecretConfigured: !!process.env.INSTAGRAM_APP_SECRET,
+      });
+    } catch (error) {
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+
   // Instagram OAuth Routes
   app.get("/auth/instagram", async (req, res) => {
     try {
